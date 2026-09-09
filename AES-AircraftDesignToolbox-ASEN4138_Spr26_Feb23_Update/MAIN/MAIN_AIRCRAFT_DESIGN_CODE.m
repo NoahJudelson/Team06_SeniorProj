@@ -58,7 +58,7 @@ W_pay_drop = 10; %lb
 W0_guess=45;
 config_row=5; %Geometric definition row number not including header (in design configuration spreadsheet file)
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
-sheetnumber=3; %Mission profile sheet number (Mission_Profile_Template.xlsx)
+sheetnumber=1; %Mission profile sheet number (Mission_Profile_Template.xlsx)
 ProfileName="Snr_Proj_v1";
 writeFlag=true;
 displayFlag=true;% flag for displaying additional iteration and segment data
@@ -66,7 +66,7 @@ displayFlag=true;% flag for displaying additional iteration and segment data
 %Point Performance
 Requirements_filename="ZW_Snr_Proj_Requirements_Input.xlsx";
 sheetnumber_req=2;
-RequirementName="JB.V1";
+RequirementName="JB_V1";
 W_S_range = linspace(40,120,100);
 
 %%%%%%%%%%%%%%%%%%%END INPUTS%%%%%%%%%%%%%%%%%%
