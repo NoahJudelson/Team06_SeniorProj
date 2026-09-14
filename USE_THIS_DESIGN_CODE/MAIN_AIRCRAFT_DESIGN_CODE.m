@@ -49,17 +49,17 @@ if ~exist(outputfolder, 'dir')
 end
 
 %Aero Analysis
-Configuration_filename="ASEN4138_TestCases.xlsx";
+Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 
 %Sizing Analysis
-W_crew = 300; %lb
+W_crew = 0; %lb
 W_pay_fixed = 0; %lb
-W_pay_drop = 1000; %lb
-W0_guess=20000;
-config_row=1; %Geometric definition row number not including header (in design configuration spreadsheet file)
-MissionProfile_filename="Mission_Profile_Template.xlsx";
-sheetnumber=3; %Mission profile sheet number (Mission_Profile_Template.xlsx)
-ProfileName="F-16";
+W_pay_drop = 0; %lb
+W0_guess=55;
+config_row=5; %Geometric definition row number not including header (in design configuration spreadsheet file)
+MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
+sheetnumber=1; %Mission profile sheet number (Mission_Profile_Template.xlsx)
+ProfileName="JB_V1";
 writeFlag=true;
 displayFlag=true;% flag for displaying additional iteration and segment data
 
