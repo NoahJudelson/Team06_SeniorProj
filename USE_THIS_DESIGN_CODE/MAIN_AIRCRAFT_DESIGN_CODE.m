@@ -64,9 +64,9 @@ writeFlag=true;
 displayFlag=true;% flag for displaying additional iteration and segment data
 
 %Point Performance
-Requirements_filename="Requirements_Input_Template.xlsx";
-sheetnumber_req=2;
-RequirementName="F-16_req";
+Requirements_filename="ZW_Snr_Proj_Requirements_Input.xlsx";
+sheetnumber_req=1;
+RequirementName="JB_V1";
 W_S_range = linspace(40,120,100);
 
 %%%%%%%%%%%%%%%%%%%END INPUTS%%%%%%%%%%%%%%%%%%
