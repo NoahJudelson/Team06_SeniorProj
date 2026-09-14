@@ -77,6 +77,11 @@ msgs.warnings = [];
 [Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,msgs]=aero_analysis(Configuration_filename,msgs);
 disp(DragPolar_Model(config_row,:))
 
+% Material weight model: use the SAME configuration row as aero and sizing.
+[Weight_Data,CG_Data] = Read_Material_Weight(Configuration_filename,config_row);
+Design_Input.Material_Empty_lb = nan(height(Design_Input),1);
+Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty;
+
 %%Mission Performance/Sizing Analysis
 MSN_Profile=Read_MSN_Profile(MissionProfile_filename,sheetnumber,ProfileName);
 [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs);
