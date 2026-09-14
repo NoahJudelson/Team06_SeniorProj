@@ -55,10 +55,10 @@ Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 W_crew = 0; %lb
 W_pay_fixed = 0; %lb
 W_pay_drop = 0; %lb
-W0_guess=55;
-config_row=5; %Geometric definition row number not including header (in design configuration spreadsheet file)
+W0_guess=55; % lbs
+config_row=2; %Geometric definition row number not including header (in design configuration spreadsheet file)
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
-sheetnumber=1; %Mission profile sheet number (Mission_Profile_Template.xlsx)
+sheetnumber=2; %Mission profile sheet number (Mission_Profile_Template.xlsx) - 1 is the template
 ProfileName="JB_V1";
 writeFlag=true;
 displayFlag=true;% flag for displaying additional iteration and segment data
@@ -80,7 +80,7 @@ disp(DragPolar_Model(config_row,:))
 %%Mission Performance/Sizing Analysis
 MSN_Profile=Read_MSN_Profile(MissionProfile_filename,sheetnumber,ProfileName);
 [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs);
-[RangeFactor_Data,M_eval_range,Alt_eval_range,RF_W] = RangeFactor(config_row,FinalWeightData,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data);
+% [RangeFactor_Data,M_eval_range,Alt_eval_range,RF_W] = RangeFactor(config_row,FinalWeightData,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data);
 displaySizingData(displayFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,MSN_Profile);
 outputfilename = writeSizingData(writeFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,DragPolar_Model,ProfileName,codeversion,outputfolder);
 
