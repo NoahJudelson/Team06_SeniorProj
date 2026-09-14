@@ -53,9 +53,9 @@ Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 
 %Sizing Analysis
 W_crew = 0; %lb
-W_pay_fixed = 0; %lb
+W_pay_fixed = 10; %lb
 W_pay_drop = 0; %lb
-W0_guess=55; % lbs
+W0_guess=45; % lbs
 config_row=2; %Geometric definition row number not including header (in design configuration spreadsheet file)
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
 sheetnumber=2; %Mission profile sheet number (Mission_Profile_Template.xlsx) - 1 is the template
@@ -65,7 +65,7 @@ displayFlag=true;% flag for displaying additional iteration and segment data
 
 %Point Performance
 Requirements_filename="ZW_Snr_Proj_Requirements_Input.xlsx";
-sheetnumber_req=1;
+sheetnumber_req=2; % Template is sheet 1
 RequirementName="JB_V1";
 W_S_range = linspace(40,120,100);
 
