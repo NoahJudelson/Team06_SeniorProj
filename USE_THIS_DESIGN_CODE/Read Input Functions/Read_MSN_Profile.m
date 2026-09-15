@@ -29,13 +29,37 @@ function MSN_Profile=Read_MSN_Profile(Filename,SheetNum,ProfileName)
     X=X(:,2:end);
     Inputs=X(2:end,2:end);
     Inputs = Inputs(1:2:end, :);
-    Inputs=table2array(Inputs);
+    % Excel may store edited numbers as text. Convert cells individually
+    % before assembling the numeric mission inputs; preserve blank cells.
+    cells=table2cell(Inputs);
+    Inputs=nan(size(cells));
+    for row=1:size(cells,1)
+        for col=1:size(cells,2)
+            value=cells{row,col};
+            if isempty(value) || (isscalar(value) && ismissing(value))
+                continue
+            end
+            if ischar(value) || isstring(value)
+                if strlength(strtrim(string(value)))==0
+                    continue
+                end
+                value=str2double(value);
+            end
+            assert(isnumeric(value) && isscalar(value) && isreal(value) && isfinite(value), ...
+                'MissionProfile:InvalidInput', ...
+                'Sheet %d, Excel row %d, input %d must be numeric or blank.',SheetNum,2*row+1,col);
+            Inputs(row,col)=value;
+        end
+    end
     NaN_log=isnan(Inputs);%logical array depicting locations of NaNs
     %marks the index of the first NaN in a row. Then saves the input_table
     %cell array for that row up to the index before the NaN. This allows
     %the 
     for i=1:size(Inputs,1)
         Idx=find(NaN_log(i,:),1);%idx of first NAN
+        if isempty(Idx)
+            Idx=size(Inputs,2)+1; % Keep every input when the row is full.
+        end
         input_table(i)={Inputs(i,1:Idx-1)};
 
 

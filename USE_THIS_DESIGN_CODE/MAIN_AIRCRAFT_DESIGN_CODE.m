@@ -53,10 +53,11 @@ Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 
 %Sizing Analysis
 W_crew = 0; %lb
-W_pay_fixed = 10; %lb
+W_pay_fixed = 0; %lb
 W_pay_drop = 0; %lb
-W0_guess=45; % lbs
+W0_guess=55; % lbs
 config_row=2; %Geometric definition row number not including header (in design configuration spreadsheet file)
+component_row=7; % Component_Data: test (Excel row 8).
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
 sheetnumber=2; %Mission profile sheet number (Mission_Profile_Template.xlsx) - 1 is the template
 ProfileName="JB_V1";
@@ -76,6 +77,14 @@ msgs.warnings = [];
 %%Aero Analysis
 [Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,msgs]=aero_analysis(Configuration_filename,msgs);
 disp(DragPolar_Model(config_row,:))
+
+%% Material Weight Model (calculated once before mission sizing)
+[Weight_Data,CG_Data] = Read_Material_Weight(Configuration_filename,config_row,component_row);
+Design_Input.Material_Empty_lb = nan(height(Design_Input),1);
+Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty(1);
+W_pay_fixed = Weight_Data.W_pay(1);
+disp(Weight_Data)
+disp(CG_Data)
 
 %%Mission Performance/Sizing Analysis
 MSN_Profile=Read_MSN_Profile(MissionProfile_filename,sheetnumber,ProfileName);
