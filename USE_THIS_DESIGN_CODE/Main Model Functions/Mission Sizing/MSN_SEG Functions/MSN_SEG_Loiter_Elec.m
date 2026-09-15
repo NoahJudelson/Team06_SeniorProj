@@ -6,7 +6,7 @@ function [Loiter_bm_fraction,LOITER_DATA,msgs] = MSN_SEG_Loiter_Elec(Loiter_Alt,
 
     %   Required Inputs
     %Loiter_Alt:  Altitude of loiter in ft
-    %E_loiter:  Designed loiter time in seconds
+    %E_loiter:  Designed loiter time in hours
 
     %   Outputs:
     %Loiter_W_fraction:  Weight fraction (end of loiter)/(beginning of
@@ -51,7 +51,7 @@ function [Loiter_bm_fraction,LOITER_DATA,msgs] = MSN_SEG_Loiter_Elec(Loiter_Alt,
         error("Only PropType 'PROP_Electric' supported")
     end
 
-    Loiter_Vel_best = sqrt(2*W_start/(rho*Sref*CL_best)); %Best velocity for max endurance based on prior segment weight (ft/s)
+    Loiter_Vel_best = sqrt(2*W_start/(rho*Sref*CL_best)); %Best velocity for max endurance based on prior segment weight (m/s)
     Loiter_M_best = Loiter_Vel_best/a; %Best mach for max endurance
 
 
@@ -62,7 +62,7 @@ function [Loiter_bm_fraction,LOITER_DATA,msgs] = MSN_SEG_Loiter_Elec(Loiter_Alt,
 
     %Find Fuel Consumption for Loiter
     [~,~,~,~,~,~,~,PA_max,~,~,msgs] =...
-        Propulsion(Loiter_Alt,Loiter_M_best,Config_Row,Propulsion_Input,msgs);
+        Propulsion(Loiter_Alt*3.281,Loiter_M_best,Config_Row,Propulsion_Input,msgs);
 
     %Subsonic Loiter Weight Fraction Model (model selction based on
     %prop or jet propulsion as defined by PropType variable)

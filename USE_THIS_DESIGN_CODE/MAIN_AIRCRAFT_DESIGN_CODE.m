@@ -41,8 +41,7 @@ addpath(genpath('Validation Test Files'));
 %% PHASE 1 - FIRST ORDER INITIAL CONCEPT
 %%%%%%%%%%%%%%%%USER INPUTS%%%%%%%%%%%%%%%%%%%
 codeversion = "excel";
-activeFile = matlab.desktop.editor.getActiveFilename;
-[scriptFolder, ~, ~] = fileparts(activeFile);
+scriptFolder = fileparts(mfilename('fullpath'));
 outputfolder = fullfile(scriptFolder, "Output Excel Sheets");
 if ~exist(outputfolder, 'dir')
     mkdir(outputfolder);
@@ -56,16 +55,17 @@ W_crew = 0; %lb
 W_pay_fixed = 0; %lb
 W_pay_drop = 0; %lb
 W0_guess=55;
-config_row=5; %Geometric definition row number not including header (in design configuration spreadsheet file)
+config_row=2; % Main_Input/Airfoil_Data: JB_{V1} (Excel row 3).
+component_row=7; % Component_Data: test (Excel row 8).
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
-sheetnumber=1; %Mission profile sheet number (Mission_Profile_Template.xlsx)
+sheetnumber=2; % Initial Mission Profile (sheet 1 contains examples only)
 ProfileName="JB_V1";
 writeFlag=true;
 displayFlag=true;% flag for displaying additional iteration and segment data
 
 %Point Performance
 Requirements_filename="ZW_Snr_Proj_Requirements_Input.xlsx";
-sheetnumber_req=1;
+sheetnumber_req=2; % JB_{V1} requirements
 RequirementName="JB_V1";
 W_S_range = linspace(40,120,100);
 
@@ -77,10 +77,13 @@ msgs.warnings = [];
 [Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,msgs]=aero_analysis(Configuration_filename,msgs);
 disp(DragPolar_Model(config_row,:))
 
-% Material weight model: use the SAME configuration row as aero and sizing.
-[Weight_Data,CG_Data] = Read_Material_Weight(Configuration_filename,config_row);
+%% Material Weight Model (calculated once before mission sizing)
+[Weight_Data,CG_Data] = Read_Material_Weight(Configuration_filename,config_row,component_row);
 Design_Input.Material_Empty_lb = nan(height(Design_Input),1);
-Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty;
+Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty(1);
+W_pay_fixed = Weight_Data.W_pay(1);
+disp(Weight_Data)
+disp(CG_Data)
 
 %%Mission Performance/Sizing Analysis
 MSN_Profile=Read_MSN_Profile(MissionProfile_filename,sheetnumber,ProfileName);

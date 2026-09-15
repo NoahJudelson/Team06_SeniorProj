@@ -47,7 +47,7 @@ function [TO_bm_fraction,TO_DATA,msgs] = MSN_SEG_TO_Elec(TO_alt,CL_max_TO,Roll_F
 
     %Takeoff Propulsion Properties
     [~,~,~,~,~,~,~,PA_max,~,~,msgs] =...
-        Propulsion(TO_alt,TO_mach,Config_Row,Propulsion_Input,msgs);
+        Propulsion(TO_alt*3.281,TO_mach,Config_Row,Propulsion_Input,msgs);
 
     %Determine thrust during takeoff depending on jet or prop propulsion type (PropType)
     %this function only supports electric!
@@ -66,6 +66,10 @@ function [TO_bm_fraction,TO_DATA,msgs] = MSN_SEG_TO_Elec(TO_alt,CL_max_TO,Roll_F
     %Takeoff Average Lift
     L = CL_max_TO*0.5*rho*(0.7*V_TO)^2*Sref; %Lift at 70% V_TO
 
+    assert(T > D+Roll_Fric*(W_start-L),'Sizing:TakeoffPower', ...
+        'Takeoff is infeasible at %.2f lb: available thrust %.1f N is below ground-roll resistance %.1f N. Check weight and propulsion inputs.', ...
+        W_start/4.44822,T,D+Roll_Fric*(W_start-L));
+
     %Takeoff ground roll calculation
     S_TO = (1.44*W_start^2)/(rho*Sref*CL_max_TO*g*(T-(D+Roll_Fric*(W_start-L)))); %Takeoff Groundroll (m)
     TO_time = S_TO/(0.7*V_TO); %Estimate of takeoff time duration in seconds
@@ -73,7 +77,7 @@ function [TO_bm_fraction,TO_DATA,msgs] = MSN_SEG_TO_Elec(TO_alt,CL_max_TO,Roll_F
     %power required for takeoff
     Preq=D*V_TO;
     if Preq>PA_max
-        warning("Required takeoff power is less than maximum available power!")
+        warning("Required takeoff power exceeds maximum available power!")
     end
 
 
@@ -81,7 +85,9 @@ function [TO_bm_fraction,TO_DATA,msgs] = MSN_SEG_TO_Elec(TO_alt,CL_max_TO,Roll_F
     if  strcmp(PropType,'PROP_Electric')
         T = PA_max/V_TO; %Calculate average thrust during climb out and acceleration
 
-        TO_bm_fraction=Preq*(TO_time/3600)/(Esb_Real*nb2s*PropEff*W_start/g);
+        % Ground-roll thrust uses full available power; battery energy must
+        % include acceleration and rolling resistance, not only drag work.
+        TO_bm_fraction=PA_max*(TO_time/3600)/(Esb_Real*nb2s*PropEff*W_start/g);
         %Record Takeoff Performance Data
         SFC=0;
 

@@ -59,17 +59,22 @@ function [Climb_bm_fraction,CLIMB_DATA,msgs] = MSN_SEG_Climb_Elec(Climb_Alt_Star
 
 
         P_req=Climb_Vel_Avg*D;
-        if (P_req>PA_max)
-            msgs.warnings{end+1} = 'Power insufficient for climb based on drag & power required!';
-            warning(msgs.warnings{end,:})
+        assert(PA_max>P_req,'Sizing:ClimbPower', ...
+            'Climb requires positive excess power: drag power %.1f W, available propulsive power %.1f W.',P_req,PA_max);
+        SpecificExcessPower = (PA_max-P_req)/W_start; %Energy-height rate, m/s
+        assert(isfinite(Delta_he) && Delta_he>=0,'Sizing:ClimbEnergy', ...
+            'Climb energy-height change must be finite and nonnegative.');
+        TOC = (Delta_he/SpecificExcessPower)/60; %Minutes; includes acceleration
+        ROC = 0;
+        if TOC>0
+            ROC = (Climb_Alt_End-Climb_Alt_Start)/(TOC*60); %Altitude rate, m/s
         end
-        ROC = (PA_max-Climb_Vel_Avg*D)/W_start; %Rate of climb in m/s
-        TOC = ((Climb_Alt_End - Climb_Alt_Start)/ROC)/60; %Time of climb in min
         T = PA_max/Climb_Vel_Avg; %Calculate average thrust during climb out and acceleration
 
         %Climb Weight Fraction Model
-        %the h term has to be in units of km. Raymer 20.9
-        Climb_bm_fraction=(Climb_Alt_End/1000-Climb_Alt_Start/1000)/((3.6)*ROC*Esb_Real*nb2s) *P_req/(Prop_Eff*W_start/g);
+        % Full-power energy includes drag work and potential/kinetic energy:
+        % PA_max*t = D*V*t + W_start*Delta_he (J). TOC/60 is hours.
+        Climb_bm_fraction=PA_max*(TOC/60)/(Esb_Real*nb2s*Prop_Eff*(W_start/g));
 
 
     else
@@ -80,6 +85,8 @@ function [Climb_bm_fraction,CLIMB_DATA,msgs] = MSN_SEG_Climb_Elec(Climb_Alt_Star
     %Record Climb Performance Data
     C=0; %C=TSFC
     %conversions back to imperial units done inline
-    CLIMB_DATA= table(Delta_he*3.281,Climb_CL,CD,CDo_msn,k1_msn,k2_msn,D/4.448,T,C,ROC*3.281,TOC*3.281);
+    CLIMB_DATA= table(Delta_he*3.281,Climb_CL,CD,CDo_msn,k1_msn,k2_msn,D/4.448,T/4.448,C,ROC*3.281,TOC, ...
+        'VariableNames',{'Energy Height Change [ft]','CL','CD','CDo','k1','k2', ...
+        'Drag [lbf]','Thrust [lbf]','SFC','Rate of Climb [ft/s]','Time of Climb [min]'});
 
 end

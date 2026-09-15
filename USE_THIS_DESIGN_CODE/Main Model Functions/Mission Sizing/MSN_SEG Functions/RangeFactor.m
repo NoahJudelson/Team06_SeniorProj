@@ -2,6 +2,18 @@ function [RangeFactor_Data,M_eval_range,Alt_eval_range,RF_W] = RangeFactor(Confi
 %Evaluates best cruise mach and altitude using range factor to help
 %optimize mission profile parameters for best cruise range.
 
+% This range factor uses fuel SFC and is not an electric range model.
+% Electric sizing intentionally returns Leg Type/BMF rather than fuel weights.
+if strcmp(Propulsion_Input.PropType(Config_Row),'PROP_Electric')
+    RangeFactor_Data = struct([]);
+    M_eval_range = [];
+    Alt_eval_range = [];
+    RF_W = [];
+    warning('RangeFactor:ElectricNotSupported', ...
+        'Skipping fuel-SFC range factor for PROP_Electric; a battery range model is required.');
+    return
+end
+
 %   Required Inputs
 
 M_eval_range = linspace(0.1,WaveDrag_Data.M_cr(Config_Row),20);

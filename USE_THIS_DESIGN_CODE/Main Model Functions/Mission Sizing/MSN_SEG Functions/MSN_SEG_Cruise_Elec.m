@@ -7,7 +7,7 @@ function [Cruise_bm_fraction,CRUISE_DATA,msgs] = MSN_SEG_Cruise_Elec(Cruise_Alt_
 
     %   Required Inputs
     %Cruise_Alt_Start:  Altitude at start of cruise in ft
-    %R_cruise:  Designed cruise range based on mission profile in ft
+    %R_cruise:  Designed cruise range based on mission profile in nautical miles
     %Cruise_Mach:  Designed cruise mach number
     %   Outputs:
     %Cruise_W_fraction:  Weight fraction (end of cruise)/(beginning of
@@ -50,11 +50,11 @@ function [Cruise_bm_fraction,CRUISE_DATA,msgs] = MSN_SEG_Cruise_Elec(Cruise_Alt_
     %Find Cruise Drag
     [CD,CDo_msn,k1_msn,k2_msn] = DragPolar_Function(Cruise_M,CL,Config_Row,DragPolar_Model,WaveDrag_Data);
     CD=CD+CDx_Cruise; %Add any external parasite drag
-    D = (CD)*0.5*rho*Cruise_Vel^2*Sref; %Drag (lb) at start altitude
+    D = (CD)*0.5*rho*Cruise_Vel^2*Sref; %Drag (N) at start altitude
 
     %Find TSFC for Cruise
     [~,~,~,~,~,~,~,PA_max,~,~,msgs] =...
-        Propulsion(Cruise_Alt_Start,Cruise_M,Config_Row,Propulsion_Input,msgs);
+        Propulsion(Cruise_Alt_Start*3.281,Cruise_M,Config_Row,Propulsion_Input,msgs);
 
     %Cruise Weight Fraction Model (model used depends on prop or jet propulsion by checking PropType variable)
 

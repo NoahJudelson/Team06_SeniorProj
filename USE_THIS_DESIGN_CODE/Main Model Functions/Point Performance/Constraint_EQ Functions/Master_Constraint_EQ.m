@@ -27,6 +27,15 @@ P_s = Req_Inputs{1,6};
 Accel = Req_Inputs{1,7};
 CDx = Req_Inputs{1,8};
 
+% Blank worksheet cells must not become empty arrays in the constraint sum.
+numericInputs = {Beta,h,M,n,P_s,Accel,CDx};
+inputNames = {'Beta','Altitude [ft]','Mach','Load factor', ...
+    'Rate of Climb [ft/s]','Acceleration [ft/s^2]','CDx'};
+valid = cellfun(@(v) isnumeric(v) && isscalar(v) && isreal(v) && isfinite(v),numericInputs);
+assert(all(valid),'PointPerformance:InvalidInput', ...
+    'Point-performance requirements need finite numeric values for: %s. Enter explicit zeros if zero is intended.', ...
+    strjoin(inputNames(~valid),', '));
+
 %Calculate atmospheric properties based on input altitude (h)
 [rho,a,T,P,nu,z] = atmos(h,'units','US');
 

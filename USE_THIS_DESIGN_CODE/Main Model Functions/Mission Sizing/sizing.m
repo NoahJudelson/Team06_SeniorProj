@@ -111,11 +111,15 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
         materialEmptyWeight = Design_Input.Material_Empty_lb(Config_Row);
         validateattributes(materialEmptyWeight, {'numeric'}, ...
             {'scalar','real','finite','positive'}, mfilename, 'Material_Empty_lb');
+        % Total weight cannot start below the fixed empty weight and payload.
+        W0_guess = max(W0_guess,materialEmptyWeight+W_crew+W_pay_fixed+W_pay_drop);
     else
         [a,c1,c2,c3,c4,c5,msgs]= WeightModel(PropType,ACType,msgs);
     end
 
     while Diff_W0 >= Converge
+        assert(i<=100,'Sizing:NoConvergence', ...
+            'Sizing did not converge in 100 iterations. Check weight, propulsion and mission inputs.');
 
         %Calculate Aircraft Parameters & Empty Weight based on Total Weight
         %(W0) and statistical model
@@ -163,7 +167,14 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
         PropType=Propulsion_Input.PropType(config);
         if strcmp(PropType,"PROP_Electric")
             BMF=sum(BMF_Mat);
-            W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
+            assert(isfinite(BMF) && BMF>=0 && BMF<1,'Sizing:BatteryFraction', ...
+                'Mission battery fraction must be between 0 and 1; calculated %.4g. Check mission and propulsion inputs.',BMF);
+            if useMaterialWeight
+                % W0 = fixed empty weight + crew + payload + BMF*W0.
+                W0_calc=(We+W_crew+W_pay_fixed)/(1-BMF);
+            else
+                W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
+            end
             %% Calc Difference Between W0_guess and W0_calc
             Diff_W0 = abs(W0_guess-W0_calc)/W0_guess;
             IterationData(i,:)=[i,W0_calc,We,BMF]; %#ok<AGROW>

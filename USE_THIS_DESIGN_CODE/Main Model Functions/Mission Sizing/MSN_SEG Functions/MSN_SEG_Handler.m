@@ -66,6 +66,9 @@ function [W_Mat,BMF_Mat,DATA,msgs] = MSN_SEG_Handler(MSN_Profile,W_start,Constan
             end
 
 
+            assert(isreal(BMF) && isfinite(BMF) && BMF>=0,'Sizing:InfeasibleSegment', ...
+                'Mission segment %d (%s) returned an invalid battery fraction at %.2f lb. Check available power and segment inputs.', ...
+                i,segment(i),W);
             BMF_Mat(i)=BMF;
 
 
