@@ -68,7 +68,7 @@ displayFlag=true;% flag for displaying additional iteration and segment data
 Requirements_filename="ZW_Snr_Proj_Requirements_Input.xlsx";
 sheetnumber_req=2; % Template is sheet 1
 RequirementName="JB_V1";
-W_S_range = linspace(40,120,100);
+W_S_range = linspace(0,20,100); % X - lim of figure 1
 
 %%%%%%%%%%%%%%%%%%%END INPUTS%%%%%%%%%%%%%%%%%%
 
