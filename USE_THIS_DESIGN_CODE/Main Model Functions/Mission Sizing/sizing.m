@@ -103,7 +103,19 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
     %% MISSION ANALYSIS ITERATIVE SIZING
     %Set Convergence Criteria
 
-    [a,c1,c2,c3,c4,c5,msgs]= WeightModel(PropType,ACType,msgs);
+    % Read_Material_Weight supplies an empty-weight estimate in pounds.
+    useMaterialWeight = (istable(Design_Input) && ...
+        ismember('Material_Empty_lb', Design_Input.Properties.VariableNames)) || ...
+        (isstruct(Design_Input) && isfield(Design_Input, 'Material_Empty_lb'));
+    if useMaterialWeight
+        materialEmptyWeight = Design_Input.Material_Empty_lb(Config_Row);
+        validateattributes(materialEmptyWeight, {'numeric'}, ...
+            {'scalar','real','finite','positive'}, mfilename, 'Material_Empty_lb');
+        % Total weight cannot start below the fixed empty weight and payload.
+        W0_guess = max(W0_guess,materialEmptyWeight+W_crew+W_pay_fixed+W_pay_drop);
+    else
+        [a,c1,c2,c3,c4,c5,msgs]= WeightModel(PropType,ACType,msgs);
+    end
 
     while Diff_W0 >= Converge
 
@@ -117,20 +129,30 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
             WingLoading = W0_guess/Sref;
 
             %Statistical empty weight fraction model for prop aircaft
-            We_W0 = (a*(W0_guess)^c1*(AR)^c2*(Power_Weight_Ratio)^c3*(WingLoading)^c4*(V_max)^c5)*Kvs;
-            We_W0=We_W0*Composite_Factor;
+            if useMaterialWeight
+                We = materialEmptyWeight;
+                We_W0 = We/W0_guess;
+            else
+                We_W0 = (a*(W0_guess)^c1*(AR)^c2*(Power_Weight_Ratio)^c3*(WingLoading)^c4*(V_max)^c5)*Kvs;
+                We_W0=We_W0*Composite_Factor;
 
-            We = We_W0*W0_guess; %Empty weight of aircraft (lb)
+                We = We_W0*W0_guess; %Empty weight of aircraft (lb)
+            end
         else
             Thrust_Weight_Ratio_mil =TA_mil_sl/W0_guess; %Uninstalled thrust at sea level / Wo
             Thrust_Weight_Ratio_AB = TA_AB_sl/W0_guess; %Uninstalled thrust at sea level / Wo
             Thrust_Weight_Ratio = max(Thrust_Weight_Ratio_AB,Thrust_Weight_Ratio_mil); %Size based on max value of T/W
             WingLoading = W0_guess/Sref;
             %Statistical empty weight fraction model for jet aircaft
-            We_W0 = (a*(W0_guess)^c1*(AR)^c2*(Thrust_Weight_Ratio)^c3*(WingLoading)^c4*(M_max)^c5)*Kvs;
-            We_W0=We_W0*Composite_Factor;
+            if useMaterialWeight
+                We = materialEmptyWeight;
+                We_W0 = We/W0_guess;
+            else
+                We_W0 = (a*(W0_guess)^c1*(AR)^c2*(Thrust_Weight_Ratio)^c3*(WingLoading)^c4*(M_max)^c5)*Kvs;
+                We_W0=We_W0*Composite_Factor;
 
-            We = We_W0*W0_guess; %Empty weight of aircraft (lb)
+                We = We_W0*W0_guess; %Empty weight of aircraft (lb)
+            end
         end
         
         %MSN_SEG_Handler replaces past versions of the code where the users
@@ -143,7 +165,12 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
         PropType=Propulsion_Input.PropType(config);
         if strcmp(PropType,"PROP_Electric")
             BMF=sum(BMF_Mat);
-            W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
+            if useMaterialWeight
+                % W0 = fixed empty weight + crew + payload + BMF*W0.
+                W0_calc=(We+W_crew+W_pay_fixed)/(1-BMF);
+            else
+                W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
+            end
             %% Calc Difference Between W0_guess and W0_calc
             Diff_W0 = abs(W0_guess-W0_calc)/W0_guess;
             IterationData(i,:)=[i,W0_calc,We,BMF]; %#ok<AGROW>
