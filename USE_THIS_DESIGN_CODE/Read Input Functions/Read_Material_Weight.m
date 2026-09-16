@@ -1,140 +1,144 @@
-function [Weight_Data,CG_Data] = Read_Material_Weight(filename,Config_Row)
-% Material weight model for ONE configuration row (header not counted).
-% Keep Main_Input, Airfoil_Data and Component_Data in the same row order.
-% Weights: lb. Lengths/CG: ft. Areas: ft^2. Bulk densities: lb/ft^3.
-% Uses the supplied Weight model: measured weight or density * volume,
-% a 1.05 glue/fastener allowance, and weight-averaged CG.
-
-Design_Input = readtable(filename,'Sheet','Main_Input','ReadRowNames',true);
-Airfoil = readtable(filename,'Sheet','Airfoil_Data','ReadRowNames',true);
-Component_Data = readtable(filename,'Sheet','Component_Data','ReadRowNames',true);
-n = Config_Row;
-assert(strcmp(Design_Input.Properties.RowNames{n},Airfoil.Properties.RowNames{n}) && ...
-    strcmp(Design_Input.Properties.RowNames{n},Component_Data.Properties.RowNames{n}), ...
-    'MaterialWeight:Configuration','Config labels must match at the selected row in all three sheets.');
-Weight_Factor = 1.05;
-
-% Nose: a zero weight means it is included in the modeled fuselage.
-W_nose = Component_Data.W_nose(n);
-CG_nose = Component_Data.Xcg_nose(n);
-
-% Fuselage
-W_f = Component_Data.W_fuse(n);
-if W_f == 0
-    material = char(string(Component_Data.Fuse_Mat(n)));
-    density = Component_Data.(material)(n);
-    W_f = density * Design_Input.Swet_f(n) * Component_Data.Thick_f(n) * Weight_Factor;
+function [Weight_Data,CG_Data] = Read_Material_Weight(filename,Config_Row,Component_Row)
+% Selected-row material weights: lb, ft, ft^2, and density in lb/ft^3.
+% Config_Row selects geometry/airfoil data; Component_Row selects components.
+% Omit Component_Row to require matching configuration labels on all sheets.
+D = readtable(filename,'Sheet','Main_Input','ReadRowNames',true);
+A = readtable(filename,'Sheet','Airfoil_Data','ReadRowNames',true);
+C = readtable(filename,'Sheet','Component_Data','ReadRowNames',true);
+separateComponentRow = nargin>=3;
+if ~separateComponentRow
+    Component_Row = Config_Row;
 end
-CG_f = Component_Data.Xcg_fuse(n);
-if CG_f == 0
-    CG_f = Design_Input.Length_f(n)/2;
+validateattributes(Config_Row,{'numeric'},{'scalar','integer','positive','<=',min(height(D),height(A))});
+validateattributes(Component_Row,{'numeric'},{'scalar','integer','positive','<=',height(C)});
+assert(strcmp(D.Properties.RowNames{Config_Row},A.Properties.RowNames{Config_Row}), ...
+    'MaterialWeight:Configuration','Main_Input and Airfoil_Data labels must match at the selected row.');
+if ~separateComponentRow
+    assert(strcmp(D.Properties.RowNames{Config_Row},C.Properties.RowNames{Component_Row}), ...
+        'MaterialWeight:Configuration','Component_Data label differs. Supply its row as the third argument.');
 end
+D = D(Config_Row,:);
+C = C(Component_Row,:);
 
-% Main wing geometry, calculated only when a weight/CG estimate needs it.
-W_w = Component_Data.W_wing(n);
-CG_w = Component_Data.Xcg_wing(n);
-if W_w == 0 || CG_w == 0
-    span = sqrt(Design_Input.Sref_w(n)*Design_Input.AR_w(n));
-    taper = Design_Input.Taper_w(n);
-    rootChord = 2*Design_Input.Sref_w(n)/(span*(1+taper));
-    MAC_w = (2/3)*rootChord*(1+taper+taper^2)/(1+taper);
-    x_MAC_w = span/6*(1+2*taper)/(1+taper)*tand(Design_Input.Sweep_w(n));
-end
-if W_w == 0
-    material = char(string(Component_Data.Wing_Mat(n)));
-    density = Component_Data.(material)(n);
-    W_w = density * Design_Input.Sref_w(n) * Airfoil.Thick_w(n) * MAC_w * Weight_Factor;
-end
-if CG_w == 0
-    CG_w = Component_Data.X_LE_wing(n)+x_MAC_w+0.3*MAC_w;
-end
-
-% h1 tail (zero area and zero measured weight means absent).
-W_h1 = Component_Data.W_h1(n);
-CG_h1 = Component_Data.Xcg_h1(n);
-if W_h1 == 0 && Design_Input.Sref_h1(n) == 0
-    CG_h1 = 0;
-else
-    if W_h1 == 0
-        material = char(string(Component_Data.h1_Mat(n)));
-        density = Component_Data.(material)(n);
-        W_h1 = density * Design_Input.Sref_h1(n) * Design_Input.MAC_h1(n) * Airfoil.Thick_h1(n) * Weight_Factor;
+% Structural components share one shell equation and independent thicknesses.
+keys = {'fuse','wing','h1','h2','v1','v2'};
+materials = {'Fuse_Mat','Wing_Mat','h1_Mat','h2_Mat','v1_Mat','v2_Mat'};
+areas = {'Swet_f','Swet_w','Swet_h1','Swet_h2','Swet_v1','Swet_v2'};
+thicknesses = {'Thick_f','SkinThick_w','SkinThick_h1','SkinThick_h2','SkinThick_v1','SkinThick_v2'};
+structuralWeights = zeros(1,6);
+structuralCG = zeros(1,6);
+for k = 1:numel(keys)
+    weight = inputWeight(C,['W_' keys{k}]);
+    if weight==0 && k>=3
+        area = D.(['Sref_' keys{k}])(1);
+        validateattributes(area,{'numeric'},{'scalar','real','finite','nonnegative'});
+        if area==0
+            continue % An unmeasured tail with no area is absent.
+        end
     end
-    if CG_h1 == 0
-        CG_h1 = Component_Data.X_LE_h1(n)+0.3*Design_Input.MAC_h1(n);
+    weight = componentWeight(D,C,weight,materials{k},areas{k},thicknesses{k});
+    structuralWeights(k) = weight;
+    if weight==0
+        continue % Absent components need neither a CG nor leading-edge input.
     end
+    cg = C.(['Xcg_' keys{k}])(1);
+    if cg==0
+        if k==1
+            cg = D.Length_f(1)/2;
+        elseif k==2
+            span = sqrt(D.Sref_w(1)*D.AR_w(1));
+            taper = D.Taper_w(1);
+            rootChord = 2*D.Sref_w(1)/(span*(1+taper));
+            MAC = (2/3)*rootChord*(1+taper+taper^2)/(1+taper);
+            xMAC = span/6*(1+2*taper)/(1+taper)*tand(D.Sweep_w(1));
+            cg = C.X_LE_wing(1)+xMAC+0.3*MAC;
+        else
+            cg = C.(['X_LE_' keys{k}])(1)+0.3*D.(['MAC_' keys{k}])(1);
+        end
+    end
+    structuralCG(k) = cg;
 end
 
-% h2 tail (zero area and zero measured weight means absent).
-W_h2 = Component_Data.W_h2(n);
-CG_h2 = Component_Data.Xcg_h2(n);
-if W_h2 == 0 && Design_Input.Sref_h2(n) == 0
-    CG_h2 = 0;
-else
-    if W_h2 == 0
-        material = char(string(Component_Data.h2_Mat(n)));
-        density = Component_Data.(material)(n);
-        W_h2 = density * Design_Input.Sref_h2(n) * Design_Input.MAC_h2(n) * Airfoil.Thick_h2(n) * Weight_Factor;
-    end
-    if CG_h2 == 0
-        CG_h2 = Component_Data.X_LE_h2(n)+0.3*Design_Input.MAC_h2(n);
+% Nose, payload, ballast and systems are direct inputs (blank means zero).
+% A zero nose weight means the nose is included in the fuselage shell.
+directKeys = {'nose','pay','ballast','systems'};
+directWeights = zeros(1,4);
+directCG = zeros(1,4);
+for k = 1:numel(directKeys)
+    directWeights(k) = inputWeight(C,['W_' directKeys{k}]);
+    if directWeights(k)>0
+        directCG(k) = C.(['Xcg_' directKeys{k}])(1);
     end
 end
-
-% v1 tail (zero area and zero measured weight means absent).
-W_v1 = Component_Data.W_v1(n);
-CG_v1 = Component_Data.Xcg_v1(n);
-if W_v1 == 0 && Design_Input.Sref_v1(n) == 0
-    CG_v1 = 0;
-else
-    if W_v1 == 0
-        material = char(string(Component_Data.v1_Mat(n)));
-        density = Component_Data.(material)(n);
-        W_v1 = density * Design_Input.Sref_v1(n) * Design_Input.MAC_v1(n) * Airfoil.Thick_v1(n) * Weight_Factor;
-    end
-    if CG_v1 == 0
-        CG_v1 = Component_Data.X_LE_v1(n)+0.3*Design_Input.MAC_v1(n);
-    end
-end
-
-% v2 tail (zero area and zero measured weight means absent).
-W_v2 = Component_Data.W_v2(n);
-CG_v2 = Component_Data.Xcg_v2(n);
-if W_v2 == 0 && Design_Input.Sref_v2(n) == 0
-    CG_v2 = 0;
-else
-    if W_v2 == 0
-        material = char(string(Component_Data.v2_Mat(n)));
-        density = Component_Data.(material)(n);
-        W_v2 = density * Design_Input.Sref_v2(n) * Design_Input.MAC_v2(n) * Airfoil.Thick_v2(n) * Weight_Factor;
-    end
-    if CG_v2 == 0
-        CG_v2 = Component_Data.X_LE_v2(n)+0.3*Design_Input.MAC_v2(n);
-    end
-end
-
-% Directly entered weights and x positions.
-W_pay = Component_Data.W_pay(n);
-CG_pay = Component_Data.Xcg_pay(n);
-W_ballast = Component_Data.W_ballast(n);
-CG_ballast = Component_Data.Xcg_ballast(n);
-W_systems = Component_Data.W_systems(n);
-CG_systems = Component_Data.Xcg_systems(n);
-
-% Empty weight excludes payload; mission sizing adds payload separately.
-weights = [W_nose W_f W_w W_h1 W_h2 W_v1 W_v2 W_ballast W_systems];
-positions = [CG_nose CG_f CG_w CG_h1 CG_h2 CG_v1 CG_v2 CG_ballast CG_systems];
-assert(all(isfinite([weights W_pay])) && all([weights W_pay]>=0) && ...
-    all(isfinite([positions CG_pay])) && sum(weights)>0, ...
-    'MaterialWeight:InvalidInput','Fill the selected row with valid weights, geometry, densities and CG positions.');
+weights = [directWeights(1) structuralWeights directWeights(3:4)];
+positions = [directCG(1) structuralCG directCG(3:4)];
+W_pay = directWeights(2);
+CG_pay = directCG(2);
 W_empty = sum(weights);
+assert(W_empty>0 && all(isfinite([positions CG_pay])) && isreal([positions CG_pay]), ...
+    'MaterialWeight:InvalidInput','Empty weight must be positive and weighted CG positions must be finite, real values in ft.');
 CG_empty = sum(weights.*positions)/W_empty;
 Wo = W_empty+W_pay;
 CG_tot = (W_empty*CG_empty+W_pay*CG_pay)/Wo;
 
-% One output row, corresponding to Config_Row in the workbook.
-Weight_Data = table(Wo,W_empty,W_nose,W_f,W_w,W_h1,W_h2,W_v1,W_v2,W_pay,W_ballast,W_systems);
-CG_Data = table(CG_tot,CG_empty,CG_nose,CG_f,CG_w,CG_h1,CG_h2,CG_v1,CG_v2,CG_pay,CG_ballast,CG_systems);
-Weight_Data.Properties.RowNames = Design_Input.Properties.RowNames(n);
-CG_Data.Properties.RowNames = Design_Input.Properties.RowNames(n);
+Weight_Data = array2table([Wo W_empty weights(1:7) W_pay weights(8:9)], ...
+    'VariableNames',{'Wo','W_empty','W_nose','W_f','W_w','W_h1','W_h2','W_v1','W_v2','W_pay','W_ballast','W_systems'});
+CG_Data = array2table([CG_tot CG_empty positions(1:7) CG_pay positions(8:9)], ...
+    'VariableNames',{'CG_tot','CG_empty','CG_nose','CG_f','CG_w','CG_h1','CG_h2','CG_v1','CG_v2','CG_pay','CG_ballast','CG_systems'});
+Weight_Data.Properties.RowNames = D.Properties.RowNames;
+CG_Data.Properties.RowNames = D.Properties.RowNames;
+
+% Component breakdown for the selected configuration (before battery sizing).
+componentLabels = {'Nose','Fuselage','Wing','Horizontal tail 1','Horizontal tail 2', ...
+    'Vertical tail 1','Vertical tail 2','Payload','Ballast','Systems'};
+componentWeights = Weight_Data{1,3:end};
+figure(700); clf;
+barh(componentWeights);
+set(gca,'YTick',1:numel(componentLabels),'YTickLabel',componentLabels,'YDir','reverse');
+text(componentWeights,1:numel(componentWeights),compose('  %.3f lb',componentWeights));
+xlim([0 1.25*max(componentWeights)]);
+xlabel('Weight [lb]'); grid on;
+title({D.Properties.RowNames{1},sprintf('Empty: %.3f lb | Payload: %.3f lb | Total known: %.3f lb', ...
+    W_empty,W_pay,Wo)},'Interpreter','none');
+end
+
+function weight = inputWeight(C,name)
+weight = C.(name)(1);
+if ismissing(weight)
+    weight = 0;
+end
+validateattributes(weight,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,name);
+end
+
+function weight = componentWeight(D,C,weight,materialName,areaName,thicknessName)
+if weight>0
+    return % Measured weight bypasses geometry/material inputs and the 1.05 factor.
+end
+area = D.(areaName)(1);
+validateattributes(area,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,areaName);
+if area==0
+    return
+end
+material = char(string(C.(materialName)(1)));
+density = C.(material)(1);
+validateattributes(density,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,material);
+weight = density * area * skinThickness(C,thicknessName) * 1.05;
+validateattributes(weight,{'numeric'},{'scalar','real','finite','nonnegative'});
+end
+
+function thickness = skinThickness(C,name)
+DEFAULT_SKIN_THICKNESS_FT = 0.0025 / 0.3048;
+thickness = DEFAULT_SKIN_THICKNESS_FT;
+if ismember(name,C.Properties.VariableNames)
+    value = C.(name)(1);
+    if iscell(value)
+        value = value{1};
+    end
+    if isstring(value) || ischar(value)
+        value = str2double(value);
+    end
+    if isnumeric(value) && isscalar(value) && isreal(value) && isfinite(value) && value>0
+        thickness = value;
+    end
+end
 end

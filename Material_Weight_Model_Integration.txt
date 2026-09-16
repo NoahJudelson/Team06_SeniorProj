@@ -1,0 +1,77 @@
+MATERIAL WEIGHT MODEL INTEGRATION
+
+1. MAIN_AIRCRAFT_DESIGN_CODE.m
+   Added component_row = 7 and reads the selected component inputs:
+   [Weight_Data,CG_Data] = Read_Material_Weight(Configuration_filename,config_row,component_row);
+
+   Passes the selected empty weight to sizing:
+   Design_Input.Material_Empty_lb = nan(height(Design_Input),1);
+   Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty(1);
+
+   Payload comes from W_pay_fixed = Weight_Data.W_pay(1).
+   The initial W0_guess is 55 lb.
+
+2. Read Input Functions/Read_Material_Weight.m
+   Reads component weights, material selections, densities, thicknesses and
+   CG inputs from Excel Component_Data; geometry comes from Main_Input.
+   Estimated fuselage, wing and active tail weights use hollow shells:
+       Weight = density * wetted area * thickness * 1.05
+   Units: density in lb/ft^3, wetted area in ft^2, thickness in ft, weight in lb.
+   A positive measured/input component weight overrides the shell estimate
+   and bypasses the 1.05 glue/fastener factor.
+
+   Thick_f, SkinThick_w, SkinThick_h1, SkinThick_h2, SkinThick_v1 and
+   SkinThick_v2 each use their own valid positive spreadsheet value.
+   Blank, missing, invalid or nonpositive thickness independently defaults
+   to 2.5 mm = 0.0025/0.3048 ft (approximately 0.0082021 ft).
+   Surface thicknesses do not fall back to the fuselage thickness.
+
+   Nose, payload, ballast and systems weights are direct spreadsheet inputs.
+   Returns component weights/CGs, W_empty, Wo, CG_empty and CG_tot.
+   Empty weight includes structure, nose, ballast and systems, excluding
+   payload. Wo = W_empty + W_pay is total known weight, not sized gross weight.
+   CGs are weight-weighted positions; total CG includes payload.
+
+3. Main Model Functions/Mission Sizing/sizing.m
+   Detects Material_Empty_lb and validates the selected value as finite,
+   real and positive. Holds materialEmptyWeight fixed during sizing:
+       We = materialEmptyWeight;
+       We_W0 = We/W0_guess;
+   Bypasses Raymer WeightModel.m when material weight is supplied.
+   When Material_Empty_lb is absent, the original Raymer statistical
+   weight calculation remains the unchanged legacy fallback.
+
+   For the material-weight electric case:
+       W0_calc = (We + W_crew + W_pay_fixed)/(1-BMF);
+   Prevents the initial guess from falling below empty weight plus crew
+   and both fixed and dropped payload:
+       W0_guess = max(W0_guess,materialEmptyWeight+W_crew+W_pay_fixed+W_pay_drop);
+
+4. Excel configuration workbook
+   ZW_Snr_Proj_Initial_Design_Config.xlsx uses the added Component_Data sheet
+   for component weights, CGs, material selections, densities and thicknesses.
+   Current selections: config_row = 2; component_row = 7.
+   These are data-row indices excluding the spreadsheet header.
+
+   - Unknown inputs: use 0 or blank for an unknown structural component
+     weight to request a shell estimate; use 0 or blank for thickness to
+     use the 2.5 mm default. For nose, payload, ballast and systems weights,
+     0 or blank means no separate weight is added, NOT an automatic estimate.
+     For a present structural component's Xcg, use 0 to request the geometry
+     estimate; do not leave it blank. Supply the required X_LE positions in
+     ft for wing/tail CG estimates. For nonzero nose, payload, ballast or
+     systems weight, supply its actual Xcg in ft: 0 means the coordinate
+     origin, not exclusion or automatic centering. Materials, densities and
+     geometry needed for shell estimates must be supplied; they have no
+     unknown-value fallback. Do not use zero density/area for unknown data,
+     since that can produce zero estimated weight.
+
+5. Overall behavior
+   Excel Component_Data -> Read_Material_Weight.m -> Weight_Data / CG_Data
+       -> Material_Empty_lb -> sizing.m
+   The component/material model replaces Raymer only when material empty
+   weight is supplied. There is no blending between models; Raymer remains
+   available as the legacy fallback. Payload stays separate from empty weight.
+
+Test note: The current integration test confirmed that material empty weight
+remained fixed at approximately 13.411 lb through the sizing iterations.

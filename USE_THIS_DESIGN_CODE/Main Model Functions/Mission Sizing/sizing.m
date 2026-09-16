@@ -56,7 +56,7 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
 
     %%%%%%%%%%%%%%%%%%TWEAKABLES%%%%%%%%%%%%%%%%%%%%%%
     %These are factors that may need to be editted for certain designs. 
-    Converge = .005; %Sets the percent difference between W0_guess and W0_calc to determine solution has converged
+    Converge = .05; % Was originally 0.005 %Sets the percent difference between W0_guess and W0_calc to determine solution has converged
     Kvs = 1; %From Raymer Table 6.1 based on variable sweep (1.04) or fixed sweep (1.0)
     Composite_Factor=1; %Using the composite homebuilt model it was found that multiplying the empty weight fraction by 0.8-0.9 lined up more closely with serial produced composite aircraft. The Raymer text reccomends a similar approach.
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -111,6 +111,8 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
         materialEmptyWeight = Design_Input.Material_Empty_lb(Config_Row);
         validateattributes(materialEmptyWeight, {'numeric'}, ...
             {'scalar','real','finite','positive'}, mfilename, 'Material_Empty_lb');
+        % Total weight cannot start below the fixed empty weight and payload.
+        W0_guess = max(W0_guess,materialEmptyWeight+W_crew+W_pay_fixed+W_pay_drop);
     else
         [a,c1,c2,c3,c4,c5,msgs]= WeightModel(PropType,ACType,msgs);
     end
@@ -163,7 +165,12 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
         PropType=Propulsion_Input.PropType(config);
         if strcmp(PropType,"PROP_Electric")
             BMF=sum(BMF_Mat);
-            W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
+            if useMaterialWeight
+                % W0 = fixed empty weight + crew + payload + BMF*W0.
+                W0_calc=(We+W_crew+W_pay_fixed)/(1-BMF);
+            else
+                W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
+            end
             %% Calc Difference Between W0_guess and W0_calc
             Diff_W0 = abs(W0_guess-W0_calc)/W0_guess;
             IterationData(i,:)=[i,W0_calc,We,BMF]; %#ok<AGROW>
