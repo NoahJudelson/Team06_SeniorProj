@@ -87,6 +87,19 @@ CG_Data = array2table([CG_tot CG_empty positions(1:7) CG_pay positions(8:9)], ..
     'VariableNames',{'CG_tot','CG_empty','CG_nose','CG_f','CG_w','CG_h1','CG_h2','CG_v1','CG_v2','CG_pay','CG_ballast','CG_systems'});
 Weight_Data.Properties.RowNames = D.Properties.RowNames;
 CG_Data.Properties.RowNames = D.Properties.RowNames;
+
+% Component breakdown for the selected configuration (before battery sizing).
+componentLabels = {'Nose','Fuselage','Wing','Horizontal tail 1','Horizontal tail 2', ...
+    'Vertical tail 1','Vertical tail 2','Payload','Ballast','Systems'};
+componentWeights = Weight_Data{1,3:end};
+figure(700); clf;
+barh(componentWeights);
+set(gca,'YTick',1:numel(componentLabels),'YTickLabel',componentLabels,'YDir','reverse');
+text(componentWeights,1:numel(componentWeights),compose('  %.3f lb',componentWeights));
+xlim([0 1.25*max(componentWeights)]);
+xlabel('Weight [lb]'); grid on;
+title({D.Properties.RowNames{1},sprintf('Empty: %.3f lb | Payload: %.3f lb | Total known: %.3f lb', ...
+    W_empty,W_pay,Wo)},'Interpreter','none');
 end
 
 function weight = inputWeight(C,name)
