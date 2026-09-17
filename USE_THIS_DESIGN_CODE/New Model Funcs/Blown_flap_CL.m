@@ -7,6 +7,7 @@ function [] = Blown_flap_CL()
 
 % Intended to evaluate the impact of blown flaps on Reynolds number and
 % therefore the coefficient of lift produced
-%   Initially assuming a simple (plain) flap model 
+%   Initially assuming a simple (plain) flap model -- I dont know how to do
+%   this??
 
 end
