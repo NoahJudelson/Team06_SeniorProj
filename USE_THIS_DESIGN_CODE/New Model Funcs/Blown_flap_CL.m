@@ -10,4 +10,13 @@ function [] = Blown_flap_CL()
 %   Initially assuming a simple (plain) flap model -- I dont know how to do
 %   this??
 
+% Inputs:
+%
+%
+%
+% Outputs:
+%
+%
+%
+
 end
