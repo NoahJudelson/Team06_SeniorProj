@@ -19,7 +19,6 @@ function [] = Blown_flap_CL()
 %
 %
 
-%% Doing some prop calculations
-
+%% First trying to 
 
 end
