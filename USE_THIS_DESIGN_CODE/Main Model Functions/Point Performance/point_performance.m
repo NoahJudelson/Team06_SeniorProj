@@ -1,149 +1,171 @@
 function msgs = point_performance(Design_Input,Config,W0_calc,Propulsion_Input,DragPolar_Model,WaveDrag_Data,outputTable,Req_Input,W_S_range,msgs)
-    %% Aircraft Design Point Performance / Constraint Sizing Analysis
-    % ASEN 4138
-    % Author: John Mah, Maggie Wussow, Jonathan Morris
 
-    % Description:  This program estimates the thrust to weight (T/W) and wing loading
-    % (W/S) requriements to acheive point performance design requirements for an aircraft.
-    % Values for T/W and W/S are based on sea level static thrust (T_sl) and total aircraft weigh (Wo).
-    % Constraint analysis provides a plot showing minimum values of T/W and W/S
-    % required for multiple user defined point performance requirements which
-    % define a "design space" of acceptable T/W and W/S combinations.  The
-    % optimal design point is defined as the lowest T/W and highest W/S combo
-    % that acheives all point performance requirements.
+%% Initialization
 
-    %% Current Version:  AY24.00
-    % Date Last Change: 1 Aug 24
-    % Changes in Current Version: Initial Version.
-    % Functions & files required to execute this script
-    %4138_Design Input File_V24-00.xlsx
-    %ASEN 4138_Aircraft_Design_Aero_Model_Main.m
-    %atmos.m
-    %DragPolar.m
-    %DragPolar_Function.m
-    %InducedDrag.m
-    %LD.m
-    %ParasiteDrag.m
-    %Propulsion.m
-    %WaveDrag.m
-    %WingGeo.m
-    %WingLiftDrag.m
+[rho_sl,a_sl] = atmos(0,'units','US');
 
+g = 32.2;
+Config_Row = Config;
+Wo = W0_calc;
 
-    %% Instructions
-    % During initial conceptual evaluation, the
-    % ASEN4138_Aircraft_Design_Aero_Model_Main.m script and
-    % ASEN4138_Aircraft_Mission_Performance_Sizing.m script
-    % should be executed prior to utilization of this code to create the drag polar and propulsion
-    % properties of the aircraft configuration concept required to run a
-    % mission performance sizing. However, after refining and modeling the
-    % concept in OPEN VSP, you should hard-code OPEN VSP values into tge drag polar values into the
-    % DragPolar_Function.m fuction and update any propulsion static sea level values in
-    % the Propulsion.m function.
+S0 = Design_Input.Sref_w(Config_Row);
+AR0 = Design_Input.AR_w(Config_Row);
+taper = Design_Input.Taper_w(Config_Row);
 
-    %%Initialization
-    %Close prior figures
+%% Original Wing Geometry
 
+b0 = sqrt(AR0*S0);
+c0 = 2*S0/(b0*(1+taper));
 
-    %Set sea level std atmosphere values & accel of gravity constant
-    [rho_sl,a_sl,T_sl,P_sl,nu_sl,z_sl] = atmos(0,'units','US'); %sea level std atmosphere properties
-    g = 32.2; %Accel of gravity (ft/s^2)
+%% Point Performance Analysis
 
-    %Set aircraft configuration evaluated based on row number in Design Input
-    Config_Row = Config; %Sets row of design input spreadsheet being evaluated or if using OPEN VSP, the array index of the configuration being evaluated based on Mission Analysis array setup
+Constants = {g,Config_Row,Wo,S0,rho_sl,a_sl};
 
-    %Set aircraft total weight from mission analysis sizing (or manually)
-    Wo = W0_calc; %Pulls final aircraft total weight from value calculated in mission performance sizing. Can manually change if requried.
+[X_Y_req,~,msgs] = Point_Performance_Handler(Req_Input,...
+    Constants,W_S_range,Propulsion_Input,Config_Row,...
+    DragPolar_Model,WaveDrag_Data,msgs);
 
-    %Set aircraft initial wing planform area (if using OpenVSP for aero analysis, make sure Config_Row =1 in line 52)
-    Sref_initial = Design_Input.Sref_w(Config_Row); %MUST UPDATE AFTER RESIZING! You will determine actual Sref needed from selected design point from this analysis.
+PropType = string(Propulsion_Input.PropType(Config_Row));
+reqtype = string(Req_Input.reqtype);
 
-    %Consolidate constants for use in Constraint_Eq function
-    Constants = {g,Config_Row,Wo,Sref_initial,rho_sl,a_sl}; %Consolidates needed properties in single array
+% Get original power or thrust to weight
 
+PowerProp = any(PropType == ...
+    ["PROP_Electric","PROP_Fuel","PROP_Turbocharged","PROP_Turboprop"]);
 
+if PowerProp
 
-
-    [X_Y_req,X_Req_Data,msgs] =Point_Performance_Handler(Req_Input,Constants,W_S_range,Propulsion_Input,Config_Row,DragPolar_Model,WaveDrag_Data,msgs);
-    PropType=Propulsion_Input.PropType;
-    PropType=PropType(Config_Row);
-
-    reqtype=Req_Input.reqtype;
-    if strcmp(PropType,'PROP_Fuel')||strcmp(PropType,'PROP_Electric')||strcmp(PropType,'PROP_Turbocharged')||strcmp(PropType,'PROP_Turboprop')
-
-        figure
-        hold on
-        for i=1:length(reqtype)
-            switch(reqtype(i))
-
-                case "Stall Velocity"
-                    xline(X_Y_req(i,1),'-.k')
-                case "Landing Distance"
-                    xline(X_Y_req(i,1),'--k')
-
-                otherwise
-                    plot(W_S_range,X_Y_req(i,:))
-            end
-
-
-        end
-        if strcmp(PropType,'PROP_Electric')
-            W_S_0=outputTable{1,4};
-            P_W_0=outputTable{1,5};
-        else
-            W_S_0=outputTable{1,5};
-            P_W_0=outputTable{1,6};
-        end
-
-        plot(W_S_0,P_W_0,'Marker','diamond','MarkerSize',10);
-        leg_lab=[Req_Input.labels,"Current DP"];
-        legend(leg_lab)
-        xlabel('Wing Loading (W/S) - lb/ft^2');
-        ylabel('Power to Weight (P/W) - hp/lb (sea level, shaft hp, total weight');
-        title('Point Performance Sizing: Constraint Diagram (Power)');
-
-
+    if PropType == "PROP_Electric"
+        Ratio = outputTable{1,5};
     else
-
-
-        figure
-        hold on
-        for i=1:length(reqtype)
-            switch(reqtype(i))
-
-                case "Stall Velocity"
-                    xline(X_Y_req(i,1),'-.k')
-                case "Landing Distance"
-                    xline(X_Y_req(i,1),'--k')
-
-                otherwise
-                    plot(W_S_range,X_Y_req(i,:))
-            end
-
-
-        end
-        W_S_0=outputTable{1,5};
-        T_W_0_mil=outputTable{1,6};
-        T_W_0_AB=outputTable{1,7};
-        plot(W_S_0,T_W_0_mil,'Marker','diamond','MarkerSize',10);
-        plot(W_S_0,T_W_0_AB,'Marker','square','MarkerSize',15);
-        leg_lab=[Req_Input.labels,"Current DP (mil)","Current DP (AB)"];
-        legend(leg_lab)
-        xlabel('Wing Loading (W/S) - lb/ft^2');
-        ylabel('Thrust to Weight (T/W) - sea level static, total weight');
-        title('Point Performance Sizing: Constraint Diagram (Thrust)');
+        Ratio = outputTable{1,6};
     end
 
+else
 
-
-
-
-
-   
+    Ratio = outputTable{1,6};
+    Ratio_AB = outputTable{1,7};
 
 end
 
+%% Wing Geometry Trade Studies
 
+% Change this range as desired
+range = .85:0.15:1.85;
 
+for study = 1:2
 
+    if study == 1
 
+        % Wingspan changes, chord stays constant
+        b = b0*range;
+        c = c0*ones(size(range));
+
+        GraphTitle = 'Wingspan Trade Study';
+
+    else
+
+        % Chord changes, wingspan stays constant
+        b = b0*ones(size(range));
+        c = c0*range;
+
+        GraphTitle = 'Root Chord Trade Study';
+
+    end
+
+    % Calculate new wing properties
+    S = b.*c*(1+taper)/2;
+    AR = b.^2./S;
+    WS = Wo./S;
+
+    %% Plot Constraint Diagram
+
+    figure
+    hold on
+
+    hReq = gobjects(length(reqtype),1);
+
+    for i = 1:length(reqtype)
+
+        switch reqtype(i)
+
+            case "Stall Velocity"
+                hReq(i) = xline(X_Y_req(i,1),'-.k');
+
+            case "Landing Distance"
+                hReq(i) = xline(X_Y_req(i,1),'--k');
+
+            otherwise
+                hReq(i) = plot(W_S_range,X_Y_req(i,:));
+
+        end
+
+    end
+
+    %% Plot All Design Points
+
+    if PowerProp
+
+        % All configurations
+        hTrade = plot(WS,Ratio*ones(size(WS)),...
+            'kd','MarkerSize',9,...
+            'MarkerFaceColor','k',...
+            'LineStyle','none');
+
+        % Highlight original configuration
+        hBase = plot(WS(3),Ratio,'rd',...
+            'MarkerSize',11,'MarkerFaceColor','r');
+
+        ylabel('Power to Weight (hp/lb)')
+
+        legend([hReq;hTrade;hBase],...
+            [string(Req_Input.labels(:));...
+            "Trade Study";"Original Design"],...
+            'Location','best')
+
+    else
+
+        % Military thrust
+        hTrade = plot(WS,Ratio*ones(size(WS)),...
+            'kd','MarkerSize',9,...
+            'MarkerFaceColor','k',...
+            'LineStyle','none');
+
+        % Afterburner thrust
+        hAB = plot(WS,Ratio_AB*ones(size(WS)),...
+            'bd','MarkerSize',9,...
+            'MarkerFaceColor','b',...
+            'LineStyle','none');
+
+        % Original configuration
+        hBase = plot(WS(3),Ratio,'rd',...
+            'MarkerSize',11,'MarkerFaceColor','r');
+
+        ylabel('Thrust to Weight')
+
+        legend([hReq;hTrade;hAB;hBase],...
+            [string(Req_Input.labels(:));...
+            "Trade Study (mil)";"Trade Study (AB)";...
+            "Original Design"],'Location','best')
+
+    end
+
+    xlabel('Wing Loading (lb/ft^2)')
+    title(GraphTitle)
+
+    % Label each diamond with percentage change
+    for j = 1:length(range)
+
+        text(WS(j),Ratio,...
+            sprintf('  %.0f%%',range(j)*100),...
+            'FontSize',8,...
+            'VerticalAlignment','bottom');
+
+    end
+
+    grid on
+    hold off
+
+end
+
+end
