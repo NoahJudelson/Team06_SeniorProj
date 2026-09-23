@@ -280,6 +280,7 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
         plotLabels = replace(plotModels,'_',' ');
         raymerRows = plotModels ~= "Component model";
         plotLabels(raymerRows) = "Raymer: " + plotLabels(raymerRows);
+        plotLabels(plotModels == "Component model") = "Component Model";
         plotLabels(plotModels == "Homebuilt_Composite_Prop") = "Raymer: Composite";
 
         [~,ax] = weightPlotAxes('comparison');
@@ -302,8 +303,15 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
         ax.YGrid = 'off';
         ax.GridColor = [0.82 0.86 0.90];
         ax.GridAlpha = 0.25;
-        xlabel(ax,'Empty weight [lb]','FontSize',26);
-        title(ax,'Empty-Weight Estimates: Component Model vs. Raymer','FontSize',24);
+        xlabel(ax,'Empty Weight [lb]','FontSize',26);
+        uavEstimate = Empty_lb(Model == uavCategory);
+        differencePercent = 100*abs(materialEmptyWeight-uavEstimate)/uavEstimate;
+        if materialEmptyWeight < uavEstimate
+            comparisonTitle = sprintf('Component Model vs. Raymer Classes (%.0f%% Lower)',differencePercent);
+        else
+            comparisonTitle = sprintf('Component Model vs. Raymer Classes (%.0f%% Higher)',differencePercent);
+        end
+        title(ax,comparisonTitle,'FontSize',24);
         figuresFolder = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),'figures');
         if ~isfolder(figuresFolder)
             mkdir(figuresFolder);

@@ -89,8 +89,8 @@ Weight_Data.Properties.RowNames = D.Properties.RowNames;
 CG_Data.Properties.RowNames = D.Properties.RowNames;
 
 % Component breakdown for the selected configuration (before battery sizing).
-componentLabels = {'Nose','Fuselage','Wing','Horizontal tail 1','Horizontal tail 2', ...
-    'Vertical tail 1','Vertical tail 2','Payload','Ballast','Systems'};
+componentLabels = {'Nose','Fuselage','Wing','Horizontal Tail 1','Horizontal Tail 2', ...
+    'Vertical Tail 1','Vertical Tail 2','Payload','Ballast','Systems'};
 componentWeights = Weight_Data{1,3:end};
 nonzeroComponents = componentWeights > 0;
 componentLabels = componentLabels(nonzeroComponents);
