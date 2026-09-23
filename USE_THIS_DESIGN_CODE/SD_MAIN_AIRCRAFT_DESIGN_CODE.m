@@ -54,9 +54,9 @@ Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 %Sizing Analysis
 WeightModelChoice = "Component"; % "Component" (fixed empty weight) or "Raymer" (iterated)
 W_crew = 0; %lb
-W_pay_fixed = 0; %lb
+W_pay_fixed = 8.8; %lb
 W_pay_drop = 0; %lb
-W0_guess=55; % lbs
+W0_guess=(55-8.8); % lbs
 config_row=1; %Geometric definition row number not including header (in design configuration spreadsheet file)
 component_row=7; % Component_Data: test (Excel row 8). - WEIGHT DATA
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
