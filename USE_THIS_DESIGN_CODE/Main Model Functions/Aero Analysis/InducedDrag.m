@@ -46,7 +46,7 @@ for n = 1:Count
     % k_eM = 1; %compressibility correction for mach; if M<0.3,=1
     % eo(n) = WingLiftModel.e(n)*k_ef*k_eDo*k_eM; %Oswalds Estimate
     % k1_sub(n) =  1/(pi*eo(n)*Design_Input.AR_w(n));
-    % k2_sub(n) = -2*k1_sub(n)*CL_minD;
+    % k2_sub(n) = -2*k1_sub(n)*CL_minD(n);
 
 
 % /////////////////////////////////////////////////////////////////////////

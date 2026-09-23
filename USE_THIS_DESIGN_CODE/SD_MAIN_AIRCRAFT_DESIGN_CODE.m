@@ -53,13 +53,13 @@ Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 
 %Sizing Analysis
 W_crew = 0; %lb
-W_pay_fixed = 0; %lb
+W_pay_fixed = 8.8; %lb
 W_pay_drop = 0; %lb
-W0_guess=55; % lbs
+W0_guess=(55-8.8); % lbs
 config_row=1; %Geometric definition row number not including header (in design configuration spreadsheet file)
 component_row=7; % Component_Data: test (Excel row 8). - WEIGHT DATA
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
-sheetnumber=2; %Mission profile sheet number (Mission_Profile_Template.xlsx) - 1 is the template
+sheetnumber=3; %Mission profile sheet number (Mission_Profile_Template.xlsx) - 1 is the template
 ProfileName="JB_V1_FP";
 writeFlag=true;
 displayFlag=true;% flag for displaying additional iteration and segment data
