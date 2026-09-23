@@ -29,7 +29,7 @@ function [Loiter_bm_fraction,LOITER_DATA,msgs] = MSN_SEG_Loiter_Elec(Loiter_Alt,
     % Convert Imperial units to SI units
     %AR=AR
     Sref=Sref*(1/3.281)^2;
-    %M_max=M_max
+    M_max=M_max
     g=g/3.281;
     Loiter_Alt=Loiter_Alt/3.281;
     W_start=W_start*4.44822;

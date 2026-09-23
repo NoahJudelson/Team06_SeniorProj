@@ -1,7 +1,7 @@
 function [CD,CDo_msn,k1_msn,k2_msn,msgs] = DragPolar_Function(Mach_Input,CL_Input,Config_Row,DragPolar_Model,WaveDrag_Data,msgs)
     %DRAG COEFFICIENT CALCULATOR
     %   Based on the subsonic and supersonic modeling of an aircraft's drag
-    %   polor, this function allows the calculation of an aircraft's drag
+    %   polar, this function allows the calculation of an aircraft's drag
     %   coefficient for an inputted mach, coefficient of lift, and designating
     %   the specific aircraft configuration row in the design input file.Can
     %   only be used with one configuration at a time through mission analysis
