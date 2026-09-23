@@ -92,14 +92,33 @@ CG_Data.Properties.RowNames = D.Properties.RowNames;
 componentLabels = {'Nose','Fuselage','Wing','Horizontal tail 1','Horizontal tail 2', ...
     'Vertical tail 1','Vertical tail 2','Payload','Ballast','Systems'};
 componentWeights = Weight_Data{1,3:end};
-figure(700); clf;
-barh(componentWeights);
-set(gca,'YTick',1:numel(componentLabels),'YTickLabel',componentLabels,'YDir','reverse');
-text(componentWeights,1:numel(componentWeights),compose('  %.3f lb',componentWeights));
-xlim([0 1.25*max(componentWeights)]);
-xlabel('Weight [lb]'); grid on;
-title({D.Properties.RowNames{1},sprintf('Empty: %.3f lb | Payload: %.3f lb | Total known: %.3f lb', ...
-    W_empty,W_pay,Wo)},'Interpreter','none');
+nonzeroComponents = componentWeights > 0;
+componentLabels = componentLabels(nonzeroComponents);
+componentWeights = componentWeights(nonzeroComponents);
+[componentWeights,sortOrder] = sort(componentWeights,'ascend');
+componentLabels = componentLabels(sortOrder);
+[~,ax] = weightPlotAxes('component');
+barh(ax,componentWeights,0.65,'FaceColor',[0.20 0.45 0.75]);
+set(ax,'YTick',1:numel(componentLabels),'YTickLabel',componentLabels, ...
+    'YDir','reverse','TickLabelInterpreter','none','FontSize',24, ...
+    'Box','off','Layer','bottom');
+ax.Position = [0.27 0.18 0.66 0.68];
+text(ax,componentWeights,1:numel(componentWeights),compose('  %.2g lb',componentWeights), ...
+    'FontSize',26,'Color',[0.15 0.18 0.22]);
+xlim(ax,[0 1.30*max(componentWeights)]);
+ylim(ax,[0.5 numel(componentWeights)+0.5]);
+xtickformat(ax,'%.2g');
+ax.XGrid = 'on';
+ax.YGrid = 'off';
+ax.GridColor = [0.82 0.86 0.90];
+ax.GridAlpha = 0.25;
+xlabel(ax,'Weight [lb]','FontSize',26);
+title(ax,'JoyBringer Component Weight Breakdown','FontSize',24);
+figuresFolder = fullfile(fileparts(fileparts(mfilename('fullpath'))),'figures');
+if ~isfolder(figuresFolder)
+    mkdir(figuresFolder);
+end
+exportgraphics(ax,fullfile(figuresFolder,'component_weight_breakdown.png'),'Resolution',300);
 end
 
 function weight = inputWeight(C,name)
