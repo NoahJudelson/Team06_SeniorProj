@@ -94,9 +94,13 @@ function msgs = point_performance(Design_Input,Config,W0_calc,Propulsion_Input,D
             W_S_0=outputTable{1,5};
             P_W_0=outputTable{1,6};
         end
+        
+        % Adding in Max Loading factor line - is just W/S * Max Loading factor (4.4G)
+        Loading_factor = 4.4; % 
+        xline(W_S_0*Loading_factor, '--r') % Decrease makes it more constricting, that doesnt make sense
 
         plot(W_S_0,P_W_0,'Marker','diamond','MarkerSize',10);
-        leg_lab=[Req_Input.labels,"Current DP"];
+        leg_lab=[Req_Input.labels,'Max Loading', "Current DP"];
         legend(leg_lab)
         xlabel('Wing Loading (W/S) - lb/ft^2');
         ylabel('Power to Weight (P/W) - hp/lb (sea level, shaft hp, total weight');
@@ -127,7 +131,7 @@ function msgs = point_performance(Design_Input,Config,W0_calc,Propulsion_Input,D
         T_W_0_AB=outputTable{1,7};
         plot(W_S_0,T_W_0_mil,'Marker','diamond','MarkerSize',10);
         plot(W_S_0,T_W_0_AB,'Marker','square','MarkerSize',15);
-        leg_lab=[Req_Input.labels,"Current DP (mil)","Current DP (AB)"];
+        leg_lab=[Req_Input.labels, "Current DP (mil)","Current DP (AB)"];
         legend(leg_lab)
         xlabel('Wing Loading (W/S) - lb/ft^2');
         ylabel('Thrust to Weight (T/W) - sea level static, total weight');
