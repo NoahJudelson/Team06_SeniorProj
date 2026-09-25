@@ -1,4 +1,4 @@
-function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs)
+function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs)
     %% Aircraft Design Mission Performance Sizing Analysis
     % ASEN 4138
     % Author: John Mah, Maggie Wussow, Jonathan Morris
@@ -61,6 +61,8 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
     Composite_Factor=1; %Using the composite homebuilt model it was found that multiplying the empty weight fraction by 0.8-0.9 lined up more closely with serial produced composite aircraft. The Raymer text reccomends a similar approach.
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+    WeightComparison = table(); % Populated only for component-model runs.
+
     %%Initialization
     %Clear Mission Analyis Variables
     clear SizingStruct Msn_Sizing_Table MsnStruct
@@ -118,6 +120,8 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
     end
 
     while Diff_W0 >= Converge
+        assert(i<=100,'Sizing:NoConvergence', ...
+            'Sizing did not converge within 100 iterations. Check the selected weight model and mission inputs.');
 
         %Calculate Aircraft Parameters & Empty Weight based on Total Weight
         %(W0) and statistical model
@@ -165,10 +169,18 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
         PropType=Propulsion_Input.PropType(config);
         if strcmp(PropType,"PROP_Electric")
             BMF=sum(BMF_Mat);
+            assert(isreal(BMF) && isfinite(BMF) && BMF>=0 && BMF<1, ...
+                'Sizing:BatteryFraction', ...
+                'Invalid mission battery fraction %.4f at W0 = %.3f lb.',BMF,W0_guess);
             if useMaterialWeight
                 % W0 = fixed empty weight + crew + payload + BMF*W0.
                 W0_calc=(We+W_crew+W_pay_fixed)/(1-BMF);
             else
+                assert(isreal(We_W0) && isfinite(We_W0) && We_W0>0 && 1-BMF-We_W0>0, ...
+                    'Sizing:WeightFraction', ...
+                    ['Raymer sizing cannot update at W0 = %.3f lb: empty fraction %.4f + ' ...
+                    'battery fraction %.4f leaves no positive payload/crew fraction. ' ...
+                    'Check the Raymer category, mission inputs and starting weight.'],W0_guess,We_W0,BMF);
                 W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
             end
             %% Calc Difference Between W0_guess and W0_calc
@@ -221,6 +233,68 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs]=si
 
     end
     
+    %% Raymer UAV weight comparison at the nominal component-sized gross weight.
+    if useMaterialWeight
+        twoXEmptyWeight = materialEmptyWeight;
+        if istable(Design_Input) && ismember('Material_Empty_2x_lb',Design_Input.Properties.VariableNames)
+            twoXEmptyWeight = Design_Input.Material_Empty_2x_lb(Config_Row);
+        elseif isstruct(Design_Input) && isfield(Design_Input,'Material_Empty_2x_lb')
+            twoXEmptyWeight = Design_Input.Material_Empty_2x_lb(Config_Row);
+        end
+        validateattributes(twoXEmptyWeight,{'numeric'}, ...
+            {'scalar','real','finite','>=',materialEmptyWeight},mfilename,'Material_Empty_2x_lb');
+        if startsWith(string(PropType),"PROP_")
+            uavCategory = "UAV_Prop";
+            loadingR = PA_shp_sl/W0;
+            speedR = M_max*a_sl*(3600/6076);
+            raymerLabel = "Raymer: UAV Prop";
+        else
+            uavCategory = "UAV_Jet";
+            loadingR = max(TA_mil_sl,TA_AB_sl)/W0;
+            speedR = M_max;
+            raymerLabel = "Raymer: UAV Jet";
+        end
+        [aR,c1R,c2R,c3R,c4R,c5R] = WeightModel(PropType,uavCategory,msgs);
+        uavEstimate = W0*aR*W0^c1R*AR^c2R*loadingR^c3R* ...
+            (W0/Sref)^c4R*speedR^c5R*Kvs*Composite_Factor;
+        Model = ["Component Model — Nominal"; "All LWPLA Thicknesses ×2"; raymerLabel];
+        Empty_lb = [materialEmptyWeight; twoXEmptyWeight; uavEstimate];
+        WeightComparison = table(Model,Empty_lb,Empty_lb/W0,Empty_lb-materialEmptyWeight, ...
+            'VariableNames',{'Model','Empty_lb','Empty_fraction','Difference_from_component_lb'});
+        fprintf('\nEmpty-weight estimates at common W0 = %.3f lb; only nominal Component model was iterated.\n',W0);
+        disp(WeightComparison)
+
+        [fig,ax] = weightPlotAxes('comparison');
+        fig.Position = [100 100 1150 560];
+        bars = barh(ax,Empty_lb,0.72,'FaceColor','flat');
+        bars.CData = [0.23 0.62 0.38; 0.13 0.48 0.73; 0.91 0.52 0.16];
+        plotLabels = ["Component"; "2× LWPLA Skin"; replace(raymerLabel,":","")];
+        set(ax,'YTick',1:3,'YTickLabel',cellstr(plotLabels), ...
+            'YDir','reverse','TickLabelInterpreter','none','FontSize',22, ...
+            'Box','off','Layer','bottom');
+        ax.Position = [0.39 0.18 0.55 0.68];
+        text(ax,Empty_lb,1:3,compose('  %.2g lb',Empty_lb), ...
+            'FontSize',22,'Color',[0.15 0.18 0.22]);
+        xlim(ax,[0 1.20*max(Empty_lb)]);
+        ylim(ax,[0.5 3.5]);
+        xtickformat(ax,'%.2g');
+        ax.XGrid = 'on';
+        ax.YGrid = 'off';
+        ax.GridColor = [0.82 0.86 0.90];
+        ax.GridAlpha = 0.25;
+        xlabel(ax,'Battery Sizing Input Weight [lb]','FontSize',22);
+        plotTitle = title(ax,'Component Weight Model vs. Raymer UAV Estimate','FontSize',22);
+        plotTitle.Units = 'normalized';
+        titlePosition = plotTitle.Position;
+        titlePosition(1) = 0.34; % Center over the exported chart, including y-axis labels.
+        plotTitle.Position = titlePosition;
+        figuresFolder = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),'figures');
+        if ~isfolder(figuresFolder)
+            mkdir(figuresFolder);
+        end
+        exportgraphics(ax,fullfile(figuresFolder,'weight_comp.png'),'Resolution',300);
+    end
+
     %%Data Tables for output.
     %Convert data structure to table
     %T_SizingStruct = structfun(@transpose, SizingStruct, 'UniformOutput', false); %transpose data in structues for ease of reading
