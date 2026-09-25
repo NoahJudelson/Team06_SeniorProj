@@ -1,69 +1,51 @@
-# Selected-row material weight model
+# Spreadsheet component weight model
 
-The spreadsheet section of `MAIN_AIRCRAFT_DESIGN_CODE.m` now runs:
+`SD_MAIN_AIRCRAFT_DESIGN_CODE.m` uses the one aircraft row in `Component_Data`:
 
 ```matlab
-[Weight_Data,CG_Data] = Read_Material_Weight(Configuration_filename,config_row);
-Design_Input.Material_Empty_lb = nan(height(Design_Input),1);
+[Weight_Data,Weight_Sensitivity] = Read_Material_Weight(Configuration_filename,config_row,component_row);
 Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty;
+Design_Input.Material_Empty_2x_lb(config_row) = Weight_Sensitivity.W_empty_2x;
 ```
 
-`config_row` is the aircraft data row, excluding the header. For example, 2
-means Excel row 3. The SAME row must describe the same configuration in
-`Main_Input`, `Airfoil_Data`, and `Component_Data`. Only this row is calculated;
-other component rows may remain unfinished. The output tables each have one row.
+Both row numbers are 1, meaning Excel row 2. `Main_Input` supplies wetted
+areas, `Airfoil_Data` supplies the matching configuration label, and
+`Component_Data` supplies materials, densities, thicknesses and direct weights.
+Mission sizing uses only the nominal empty weight; the 2× case is for the
+comparison plot.
 
-`sizing.m` reads `Design_Input.Material_Empty_lb(Config_Row)` and uses:
+## Weight equations
 
-```matlab
-We = materialEmptyWeight;
-We_W0 = We/W0_guess;
-```
+- Fuselage, wing and tails: `1.05 * density * wetted area * skin thickness`.
+  A positive entered component weight overrides this estimate. Missing or
+  nonpositive skin thickness uses the existing 2.5 mm default.
+- Solid bulkheads: `N_bulkhead * Width_bulkhead * Height_bulkhead *
+  Depth_bulkhead * rho_LW_balsa`. The three dimensions in ft describe one
+  rectangular prism. Positive `W_bulkhead` overrides this estimate.
+- Wing spars: `N_wing_spar * W_wing_spar`. Enter the weight of one 1 m spar
+  in `W_wing_spar` and its count in `N_wing_spar`. The current inputs are
+  `2 * 0.293 = 0.586 lb` total.
+- Empty weight sums shells, spar, bulkheads, systems and ballast. Payload is
+  reported separately, and the mission battery is sized later.
+- The 2× case adds the nominal weight of each analytically estimated LWPLA
+  shell; measured components, spar and bulkheads do not increase.
 
-This path bypasses Raymer. Other drivers without the material-weight assignment
-still use Raymer. `sizing_VSP.m` supports the same assignment, but its driver
-currently defines geometry manually; ensure the workbook geometry matches before
-attaching a weight to the corresponding VSP configuration. The demo and VSP
-driver inputs were not changed by this simplification.
+All weights are lb, densities lb/ft³, areas ft² and thicknesses ft. No CG
+inputs or calculations are used by this weight path.
 
-## Equations and units
+## Spar and bulkhead inputs in the current workbook
 
-The implementation follows the supplied Weight function with explicit sections:
+| Column | Input | Current example |
+| --- | --- | ---: |
+| T | `Bulkhead_Mat` | `rho_LW_balsa` |
+| Z | `W_wing_spar`, lb per spar | 0.293 |
+| AA | `W_bulkhead` override, lb | 0 |
+| AB | `rho_LW_balsa`, lb/ft³ | 5.5 |
+| AC | `N_bulkhead` | 4 |
+| AD | `Width_bulkhead`, ft | 0.30 |
+| AE | `Height_bulkhead`, ft | 0.35 |
+| AF | `Depth_bulkhead`, ft | 0.01 |
+| AG | `N_wing_spar` | 2 |
 
-- Fuselage: `density * Swet_f * Thick_f * 1.05`.
-- Wing: `density * Sref_w * Airfoil.Thick_w * MAC_w * 1.05`.
-- Tails: `density * Sref * MAC * Airfoil.Thick * 1.05`.
-- Measured component weights override those estimates and receive no 1.05 factor.
-- Empty weight sums airframe, ballast, and installed systems, excluding payload.
-- Loaded weight adds payload; CG is `sum(weight * x) / sum(weight)`.
-
-All weights are lb, distances ft, areas ft^2, and densities lb/ft^3.
-Airfoil thicknesses are dimensionless thickness/chord ratios. No gravity or
-metric conversion factor is needed. The earlier area-density feature was removed.
-The existing second horizontal tail and systems entries are retained so their
-weights remain accounted for.
-
-## Component_Data inputs
-
-Use the single Component_Data tab. No additional tab is required.
-
-| Inputs | What to enter |
-| --- | --- |
-| `W_nose`, `W_fuse`, `W_wing`, `W_h1`, `W_h2`, `W_v1`, `W_v2` | Measured lb; zero selects an estimate. Zero nose weight is included in the fuselage estimate. |
-| Matching `Xcg_*` columns | Position in ft from the nose; zero selects geometric CG for fuselage, wing, and tails. |
-| `W_pay`, `Xcg_pay` | Payload weight and its x position. |
-| `W_ballast`, `Xcg_ballast` | Ballast weight and its x position. |
-| `W_systems`, `Xcg_systems` | Other installed equipment weight and its combined x position. |
-| `Fuse_Mat`, `Wing_Mat`, tail `*_Mat` | Exact density column name, such as `rho_LWPLA`. |
-| `rho_LWPLA`, `rho_bulk` | Bulk density in lb/ft^3 on the same row. |
-| `Thick_f` | Fuselage thickness in ft. |
-| `X_LE_wing`, tail `X_LE_*` | Root leading-edge x position in ft for geometric CG. |
-
-Enter zeros for absent components. A zero-area, zero-weight tail is skipped.
-Keep mission payload arguments consistent with the component payload. Mission
-sizing adds fuel or propulsion battery separately; exclude these from empty
-weight. The reported loaded CG includes the component payload, not mission
-fuel/battery or crew.
-
-`test_material_weight` checks the equations and confirms that selecting row 2
-works with an unfinished row 1. Its synthetic values are not aircraft inputs.
+`test_material_weight` checks the shell equation, spar addition, bulkhead
+estimate and override, and 2× sensitivity exclusions.

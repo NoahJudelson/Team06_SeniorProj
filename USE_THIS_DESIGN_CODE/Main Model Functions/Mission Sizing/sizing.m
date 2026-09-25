@@ -233,85 +233,61 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
 
     end
     
-    %% Compare empty-weight models once at the component-sized gross weight.
-    % Category estimates are benchmarks only; they do not enter the iteration.
+    %% Raymer UAV weight comparison at the nominal component-sized gross weight.
     if useMaterialWeight
-        if startsWith(string(PropType),"PROP_")
-            categories = ["GA_Metal_Single"; "GA_Metal_Twin"; "Ag_Aircraft_Prop"; ...
-                "Turboprop_Transport"; "Flying_Boat_Prop"; "Homebuilt_Metal/wood_Prop"; ...
-                "Homebuilt_Composite_Prop"; "Sailplane_Unpowered"; "Sailplane_Powered"; ...
-                "Aerobatic_Prop"; "UAV_Prop"];
-            loadingR = PA_shp_sl/W0; % Total shaft hp / lb
-            speedR = M_max*a_sl*(3600/6076); % Legacy model uses knots for props
-        else
-            categories = ["Jet_Fighter"; "Jet_Trainer"; "Jet_Transport"; ...
-                "Military_Cargo/Bomber"; "Business_Jet"; "UAV_Jet"];
-            loadingR = max(TA_mil_sl,TA_AB_sl)/W0;
-            speedR = M_max;
+        twoXEmptyWeight = materialEmptyWeight;
+        if istable(Design_Input) && ismember('Material_Empty_2x_lb',Design_Input.Properties.VariableNames)
+            twoXEmptyWeight = Design_Input.Material_Empty_2x_lb(Config_Row);
+        elseif isstruct(Design_Input) && isfield(Design_Input,'Material_Empty_2x_lb')
+            twoXEmptyWeight = Design_Input.Material_Empty_2x_lb(Config_Row);
         end
-        raymerEmpty = zeros(numel(categories),1);
-        for k = 1:numel(categories)
-            [aR,c1R,c2R,c3R,c4R,c5R] = WeightModel(PropType,categories(k),msgs);
-            raymerEmpty(k) = W0*aR*W0^c1R*AR^c2R*loadingR^c3R* ...
-                (W0/Sref)^c4R*speedR^c5R*Kvs*Composite_Factor;
-        end
-        [raymerEmpty,sortIndex] = sort(raymerEmpty,'ascend');
-        categories = categories(sortIndex);
-        Model = ["Component model"; categories];
-        Empty_lb = [materialEmptyWeight; raymerEmpty];
-        WeightComparison = table(Model,Empty_lb,Empty_lb/W0,Empty_lb-materialEmptyWeight, ...
-            'VariableNames',{'Model','Empty_lb','Empty_fraction','Difference_from_component_lb'});
-        fprintf('\nEmpty-weight estimates at common W0 = %.3f lb; only Component model was iterated.\n',W0);
-        disp(WeightComparison)
-
-        % Keep the plot focused; the full Raymer comparison remains in the table.
+        validateattributes(twoXEmptyWeight,{'numeric'}, ...
+            {'scalar','real','finite','>=',materialEmptyWeight},mfilename,'Material_Empty_2x_lb');
         if startsWith(string(PropType),"PROP_")
             uavCategory = "UAV_Prop";
-            representativeCategories = [uavCategory; "Homebuilt_Composite_Prop"];
+            loadingR = PA_shp_sl/W0;
+            speedR = M_max*a_sl*(3600/6076);
+            raymerLabel = "Raymer: UAV Prop";
         else
             uavCategory = "UAV_Jet";
-            representativeCategories = [uavCategory; "Jet_Trainer"];
+            loadingR = max(TA_mil_sl,TA_AB_sl)/W0;
+            speedR = M_max;
+            raymerLabel = "Raymer: UAV Jet";
         end
-        plotRows = ismember(Model,["Component model"; representativeCategories]);
-        plotModels = Model(plotRows);
-        plotWeights = Empty_lb(plotRows);
-        [plotWeights,plotOrder] = sort(plotWeights,'ascend');
-        plotModels = plotModels(plotOrder);
-        plotLabels = replace(plotModels,'_',' ');
-        raymerRows = plotModels ~= "Component model";
-        plotLabels(raymerRows) = "Raymer: " + plotLabels(raymerRows);
-        plotLabels(plotModels == "Component model") = "Component Model";
-        plotLabels(plotModels == "Homebuilt_Composite_Prop") = "Raymer: Composite";
+        [aR,c1R,c2R,c3R,c4R,c5R] = WeightModel(PropType,uavCategory,msgs);
+        uavEstimate = W0*aR*W0^c1R*AR^c2R*loadingR^c3R* ...
+            (W0/Sref)^c4R*speedR^c5R*Kvs*Composite_Factor;
+        Model = ["Component Model — Nominal"; "All LWPLA Thicknesses ×2"; raymerLabel];
+        Empty_lb = [materialEmptyWeight; twoXEmptyWeight; uavEstimate];
+        WeightComparison = table(Model,Empty_lb,Empty_lb/W0,Empty_lb-materialEmptyWeight, ...
+            'VariableNames',{'Model','Empty_lb','Empty_fraction','Difference_from_component_lb'});
+        fprintf('\nEmpty-weight estimates at common W0 = %.3f lb; only nominal Component model was iterated.\n',W0);
+        disp(WeightComparison)
 
-        [~,ax] = weightPlotAxes('comparison');
-        bars = barh(ax,plotWeights,0.65,'FaceColor','flat');
-        bars.CData = repmat([0.56 0.64 0.72],numel(plotModels),1);
-        bars.CData(plotModels == "Component model",:) = repmat([0.23 0.62 0.38], ...
-            sum(plotModels == "Component model"),1);
-        bars.CData(plotModels == uavCategory,:) = repmat([0.91 0.52 0.16], ...
-            sum(plotModels == uavCategory),1);
-        set(ax,'YTick',1:numel(plotModels),'YTickLabel',plotLabels, ...
-            'YDir','reverse','TickLabelInterpreter','none','FontSize',24, ...
+        [fig,ax] = weightPlotAxes('comparison');
+        fig.Position = [100 100 1150 560];
+        bars = barh(ax,Empty_lb,0.72,'FaceColor','flat');
+        bars.CData = [0.23 0.62 0.38; 0.13 0.48 0.73; 0.91 0.52 0.16];
+        plotLabels = ["Component"; "2× LWPLA Skin"; replace(raymerLabel,":","")];
+        set(ax,'YTick',1:3,'YTickLabel',cellstr(plotLabels), ...
+            'YDir','reverse','TickLabelInterpreter','none','FontSize',22, ...
             'Box','off','Layer','bottom');
-        ax.Position = [0.27 0.18 0.66 0.68];
-        text(ax,plotWeights,1:numel(plotModels),compose('  %.2g lb',plotWeights), ...
-            'FontSize',26,'Color',[0.15 0.18 0.22]);
-        xlim(ax,[0 1.18*max(plotWeights)]);
-        ylim(ax,[0.5 numel(plotModels)+0.5]);
+        ax.Position = [0.39 0.18 0.55 0.68];
+        text(ax,Empty_lb,1:3,compose('  %.2g lb',Empty_lb), ...
+            'FontSize',22,'Color',[0.15 0.18 0.22]);
+        xlim(ax,[0 1.20*max(Empty_lb)]);
+        ylim(ax,[0.5 3.5]);
         xtickformat(ax,'%.2g');
         ax.XGrid = 'on';
         ax.YGrid = 'off';
         ax.GridColor = [0.82 0.86 0.90];
         ax.GridAlpha = 0.25;
-        xlabel(ax,'Empty Weight [lb]','FontSize',26);
-        uavEstimate = Empty_lb(Model == uavCategory);
-        differencePercent = 100*abs(materialEmptyWeight-uavEstimate)/uavEstimate;
-        if materialEmptyWeight < uavEstimate
-            comparisonTitle = sprintf('Component Model vs. Raymer Classes (%.0f%% Lower)',differencePercent);
-        else
-            comparisonTitle = sprintf('Component Model vs. Raymer Classes (%.0f%% Higher)',differencePercent);
-        end
-        title(ax,comparisonTitle,'FontSize',24);
+        xlabel(ax,'Battery Sizing Input Weight [lb]','FontSize',22);
+        plotTitle = title(ax,'Component Weight Model vs. Raymer UAV Estimate','FontSize',22);
+        plotTitle.Units = 'normalized';
+        titlePosition = plotTitle.Position;
+        titlePosition(1) = 0.34; % Center over the exported chart, including y-axis labels.
+        plotTitle.Position = titlePosition;
         figuresFolder = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),'figures');
         if ~isfolder(figuresFolder)
             mkdir(figuresFolder);

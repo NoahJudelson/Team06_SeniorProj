@@ -1,41 +1,32 @@
 MATERIAL WEIGHT MODEL INTEGRATION
 
 Workflow
-- MAIN_AIRCRAFT_DESIGN_CODE.m selects WeightModelChoice (Component or Raymer),
-  config_row = 1, component_row = 7, and initial W0_guess = 55 lb.
-- Component_Data -> Read_Material_Weight.m -> Weight_Data / CG_Data ->
-  Design_Input.Material_Empty_lb -> sizing.m. Payload comes from W_pay.
-- Component mode holds empty weight fixed while sizing gross/battery weight:
-  W0_calc = (We + W_crew + W_pay_fixed)/(1-BMF).
-- Raymer mode recalculates statistical empty weight each iteration. It remains
-  the fallback when Material_Empty_lb is absent; the models are never blended.
-- Figure 710 compares Raymer categories once at the component-sized final W0.
-  Changing component weight changes W0 and therefore the Raymer estimates.
+- SD_MAIN_AIRCRAFT_DESIGN_CODE.m selects Component or Raymer sizing.
+  config_row = component_row = 1, which selects Excel row 2.
+- Component_Data -> Read_Material_Weight.m -> Weight_Data and
+  Weight_Sensitivity -> Design_Input.Material_Empty_lb and
+  Material_Empty_2x_lb -> sizing.m.
+- Component mode sizes the mission from fixed nominal empty weight and payload.
+  Raymer UAV Prop is evaluated at that nominal run's final gross weight only
+  for the three-bar empty-weight comparison.
+- CG is not calculated in this weight path because mission sizing does not
+  consume it. Use the separate mass/stability analysis for CG work.
 
-Spreadsheet rules
-- Shell weight = density * wetted area * thickness * 1.05.
-  Units: lb/ft^3, ft^2, ft, and lb; CG/leading-edge positions are in ft.
-- Positive structural weight overrides the estimate (no 1.05 multiplier).
-  Zero/blank structural weight requests a shell estimate.
-- Each blank/invalid/nonpositive thickness defaults independently to
-  2.5 mm = 0.0082021 ft. Valid spreadsheet thickness always overrides it.
-- Zero/blank nose, payload, ballast or systems weight adds nothing;
-  these items are NOT automatically estimated. Supply materials, densities
-  and geometry for shell estimates; zero density/area is not an unknown value.
-- Structural Xcg = 0 requests a geometry estimate; do not leave it blank.
-  Supply wing/tail X_LE. For nose/payload/ballast/systems, Xcg = 0 means the datum.
-- Empty weight excludes payload and the mission-sized battery.
-  Weight_Data.Wo = empty + payload; it is not the sized gross weight.
-
-Systems and landing gear (Component_Data, Excel row 8)
-- W_systems (T8) = 7.3 lb: 5.3 lb systems + 2.0 lb fixed landing gear.
-  Both appear under Systems; do not add landing gear again separately.
-- Systems budget: motors 870 g; ESCs 250 g; six servos 360 g;
-  flight controller/GPS 66.6 g; radio/power/wiring 430 g;
-  props/mounts/linkages 400 g. Total 2376.6 g, rounded to 5.3 lb.
-- Gear budget: legs/strut 530 g; wheels 164 g; steering servo 60 g;
-  mounting hardware 150 g. Total 904 g, rounded to 2.0 lb.
-- These are reference-hardware weights plus allowances, not selected hardware
-  or a landing-load design. Unmodeled spars/ribs/bulkheads remain excluded.
-- Xcg_systems (U8) = 1.9735 ft: temporary fuselage midpoint; replace when known.
-
+Component_Data, Excel row 2
+- Shell weights: 1.05 * material density * wetted area * skin thickness.
+  Positive entered structural weights override the estimate.
+- Solid bulkheads: N_bulkhead * Width_bulkhead * Height_bulkhead *
+  Depth_bulkhead * rho_LW_balsa. Current editable example is 4 rectangular
+  prisms, each 0.30 ft wide, 0.35 ft tall and 0.01 ft deep, with 5.5 lb/ft^3
+  lightweight balsa. No skin allowance is applied. Positive W_bulkhead
+  overrides the estimate; replace these placeholder dimensions with the
+  actual solid geometry when known.
+- Wing spars: N_wing_spar * W_wing_spar. The current example has 2 one-meter
+  spars at 0.293 lb each, for 0.586 lb total. Enter a different measured
+  per-spar weight if needed. No spar density or area calculation is used.
+- Empty weight includes shells, bulkheads, spar, systems and ballast.
+  Payload and the mission battery are excluded. Weight_Data.Wo is empty
+  weight plus payload, not the sized gross weight.
+- The 2x case doubles only analytically estimated rho_LWPLA shell weights.
+  Measured weights, spar, bulkheads and systems remain fixed.
+- Units: weights lb, density lb/ft^3, area ft^2, thickness ft.

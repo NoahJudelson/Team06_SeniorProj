@@ -1,4 +1,4 @@
-function [Weight_Data,CG_Data] = Read_Material_Weight(filename,Config_Row,Component_Row)
+function [Weight_Data,Weight_Sensitivity] = Read_Material_Weight(filename,Config_Row,Component_Row)
 % Selected-row material weights: lb, ft, ft^2, and density in lb/ft^3.
 % Config_Row selects geometry/airfoil data; Component_Row selects components.
 % Omit Component_Row to require matching configuration labels on all sheets.
@@ -26,7 +26,7 @@ materials = {'Fuse_Mat','Wing_Mat','h1_Mat','h2_Mat','v1_Mat','v2_Mat'};
 areas = {'Swet_f','Swet_w','Swet_h1','Swet_h2','Swet_v1','Swet_v2'};
 thicknesses = {'Thick_f','SkinThick_w','SkinThick_h1','SkinThick_h2','SkinThick_v1','SkinThick_v2'};
 structuralWeights = zeros(1,6);
-structuralCG = zeros(1,6);
+lwplaSkinWeight = 0;
 for k = 1:numel(keys)
     weight = inputWeight(C,['W_' keys{k}]);
     if weight==0 && k>=3
@@ -36,61 +36,66 @@ for k = 1:numel(keys)
             continue % An unmeasured tail with no area is absent.
         end
     end
+    measured = weight>0;
     weight = componentWeight(D,C,weight,materials{k},areas{k},thicknesses{k});
+    if ~measured && strcmp(string(C.(materials{k})(1)),"rho_LWPLA")
+        lwplaSkinWeight = lwplaSkinWeight + weight;
+    end
     structuralWeights(k) = weight;
-    if weight==0
-        continue % Absent components need neither a CG nor leading-edge input.
-    end
-    cg = C.(['Xcg_' keys{k}])(1);
-    if cg==0
-        if k==1
-            cg = D.Length_f(1)/2;
-        elseif k==2
-            span = sqrt(D.Sref_w(1)*D.AR_w(1));
-            taper = D.Taper_w(1);
-            rootChord = 2*D.Sref_w(1)/(span*(1+taper));
-            MAC = (2/3)*rootChord*(1+taper+taper^2)/(1+taper);
-            xMAC = span/6*(1+2*taper)/(1+taper)*tand(D.Sweep_w(1));
-            cg = C.X_LE_wing(1)+xMAC+0.3*MAC;
-        else
-            cg = C.(['X_LE_' keys{k}])(1)+0.3*D.(['MAC_' keys{k}])(1);
-        end
-    end
-    structuralCG(k) = cg;
 end
+
+% Solid bulkhead prisms: count * width * height * depth * density.
+bulkheadWeight = inputWeight(C,'W_bulkhead');
+if bulkheadWeight==0
+    count = C.N_bulkhead(1);
+    panelWidth = C.Width_bulkhead(1);
+    panelHeight = C.Height_bulkhead(1);
+    panelDepth = C.Depth_bulkhead(1);
+    material = char(string(C.Bulkhead_Mat(1)));
+    assert(ismember(material,C.Properties.VariableNames), ...
+        'MaterialWeight:BulkheadMaterial','Bulkhead_Mat must name a density column.');
+    density = C.(material)(1);
+    validateattributes(count,{'numeric'},{'scalar','integer','nonnegative'},mfilename,'N_bulkhead');
+    validateattributes(panelWidth,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,'Width_bulkhead');
+    validateattributes(panelHeight,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,'Height_bulkhead');
+    validateattributes(panelDepth,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,'Depth_bulkhead');
+    validateattributes(density,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,material);
+    bulkheadWeight = count*panelWidth*panelHeight*panelDepth*density;
+end
+% Spar input is the weight of one spar; the spreadsheet sets the count.
+assert(ismember('N_wing_spar',C.Properties.VariableNames), ...
+    'MaterialWeight:MissingSparCount','Component_Data needs an N_wing_spar column.');
+sparCount = C.N_wing_spar(1);
+validateattributes(sparCount,{'numeric'},{'scalar','integer','nonnegative','finite'},mfilename,'N_wing_spar');
+sparWeight = sparCount*inputWeight(C,'W_wing_spar');
 
 % Nose, payload, ballast and systems are direct inputs (blank means zero).
 % A zero nose weight means the nose is included in the fuselage shell.
 directKeys = {'nose','pay','ballast','systems'};
 directWeights = zeros(1,4);
-directCG = zeros(1,4);
 for k = 1:numel(directKeys)
     directWeights(k) = inputWeight(C,['W_' directKeys{k}]);
-    if directWeights(k)>0
-        directCG(k) = C.(['Xcg_' directKeys{k}])(1);
-    end
 end
-weights = [directWeights(1) structuralWeights directWeights(3:4)];
-positions = [directCG(1) structuralCG directCG(3:4)];
+weights = [directWeights(1) structuralWeights sparWeight bulkheadWeight directWeights(3:4)];
 W_pay = directWeights(2);
-CG_pay = directCG(2);
 W_empty = sum(weights);
-assert(W_empty>0 && all(isfinite([positions CG_pay])) && isreal([positions CG_pay]), ...
-    'MaterialWeight:InvalidInput','Empty weight must be positive and weighted CG positions must be finite, real values in ft.');
-CG_empty = sum(weights.*positions)/W_empty;
+assert(W_empty>0,'MaterialWeight:InvalidInput','Empty weight must be positive.');
 Wo = W_empty+W_pay;
-CG_tot = (W_empty*CG_empty+W_pay*CG_pay)/Wo;
 
-Weight_Data = array2table([Wo W_empty weights(1:7) W_pay weights(8:9)], ...
-    'VariableNames',{'Wo','W_empty','W_nose','W_f','W_w','W_h1','W_h2','W_v1','W_v2','W_pay','W_ballast','W_systems'});
-CG_Data = array2table([CG_tot CG_empty positions(1:7) CG_pay positions(8:9)], ...
-    'VariableNames',{'CG_tot','CG_empty','CG_nose','CG_f','CG_w','CG_h1','CG_h2','CG_v1','CG_v2','CG_pay','CG_ballast','CG_systems'});
+Weight_Data = array2table([Wo W_empty weights(1:9) W_pay weights(10:11)], ...
+    'VariableNames',{'Wo','W_empty','W_nose','W_f','W_w','W_h1','W_h2','W_v1','W_v2','W_wing_spar','W_bulkhead','W_pay','W_ballast','W_systems'});
+% 2x LWPLA skin-thickness sensitivity case; nominal sizing is unchanged.
+Weight_Sensitivity = table(W_empty,W_empty+lwplaSkinWeight,lwplaSkinWeight, ...
+    'VariableNames',{'W_empty_nominal','W_empty_2x','Skin_weight_added'});
 Weight_Data.Properties.RowNames = D.Properties.RowNames;
-CG_Data.Properties.RowNames = D.Properties.RowNames;
 
 % Component breakdown for the selected configuration (before battery sizing).
+sparLabel = sprintf('%d Wing Spars',sparCount);
+if sparCount==1
+    sparLabel = '1 Wing Spar';
+end
 componentLabels = {'Nose','Fuselage','Wing','Horizontal Tail 1','Horizontal Tail 2', ...
-    'Vertical Tail 1','Vertical Tail 2','Payload','Ballast','Systems'};
+    'Vertical Tail 1','Vertical Tail 2',sparLabel,sprintf('%d Bulkheads',C.N_bulkhead(1)),'Payload','Ballast','Systems'};
 componentWeights = Weight_Data{1,3:end};
 nonzeroComponents = componentWeights > 0;
 componentLabels = componentLabels(nonzeroComponents);
