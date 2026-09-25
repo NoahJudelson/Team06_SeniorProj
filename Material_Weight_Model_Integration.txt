@@ -39,5 +39,3 @@ Systems and landing gear (Component_Data, Excel row 8)
   or a landing-load design. Unmodeled spars/ribs/bulkheads remain excluded.
 - Xcg_systems (U8) = 1.9735 ft: temporary fuselage midpoint; replace when known.
 
-Last verified run: empty 20.213 lb, payload 8.8 lb, battery 22.356 lb,
-gross 51.369 lb. Empty weight remained fixed throughout sizing.
