@@ -4,7 +4,11 @@ function [] = Graph_figure_update(FinalWeightData)
 %   Creates 1000 - series figures which are the new ones Im making
 
 %% Creating mission segment plot - Leg Type vs. BMF bar chart
-figure(1001)
+% Specifying figure size and what not
+mission_seg_fig = figure(1001);
+mission_seg_fig.Units = 'inches';
+mission_seg_fig.Position=[1,1,16,9];
+
 % Converting BMF strings to numbers
 BMF = zeros(length(FinalWeightData{:,2}),1);
 for i=1:length(FinalWeightData{:,2})
@@ -21,9 +25,11 @@ for i=1:length(missionSegments)
     end
 end
 bar(missionSegments, BMF);
-xlabel('Mission Segment');
-ylabel('BMF');
-title('BMF variation over Mission Profile');
-%print('Mission Profile Visual', '-dpng', '-r300')
+ax = gca;
+ax.FontSize = 18;
+xlabel('Mission Segment', FontSize=22);
+ylabel('BMF', FontSize=22);
+title('BMF variation over Mission Profile', FontSize=24);
+print('Mission Profile Visual', '-dpng', '-r300')
 
 end
