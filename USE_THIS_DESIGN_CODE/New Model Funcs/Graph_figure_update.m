@@ -30,6 +30,11 @@ ax.FontSize = 18;
 xlabel('Mission Segment', FontSize=22);
 ylabel('BMF', FontSize=22);
 title('BMF variation over Mission Profile', FontSize=24);
-print('Mission Profile Visual', '-dpng', '-r300')
+%print('Mission Profile Visual', '-dpng', '-r300')
 
+%% Fixing Figure 1 for DR1
+figure(1)
+xlim([0,8])
+ylim([0,1])
+ylabeb('Power to Weight', interpreter)
 end
