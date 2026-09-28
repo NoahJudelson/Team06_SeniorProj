@@ -37,6 +37,7 @@ addpath(genpath('Input Excel Sheets'));
 addpath(genpath('Main Model Functions'));
 addpath(genpath('Read Input Functions'));
 addpath(genpath('Validation Test Files'));
+addpath(genpath('New Model Funcs'));
 
 %% PHASE 1 - FIRST ORDER INITIAL CONCEPT
 %%%%%%%%%%%%%%%%USER INPUTS%%%%%%%%%%%%%%%%%%%
