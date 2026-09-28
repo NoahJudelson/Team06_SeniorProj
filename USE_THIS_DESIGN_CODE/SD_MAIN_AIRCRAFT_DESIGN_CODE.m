@@ -119,6 +119,7 @@ msgs = point_performance(Design_Input,config_row,W0,Propulsion_Input,DragPolar_M
 
 writemsgs(msgs,outputfilename) %output warnings to output file
 
+
 %%%%%%%%%%%% COMENTING OUT UNTIL WE HAVE OPENVSP %%%%%%%%%%%%%%%%
 % 
 % %% PHASE 2 AND 3 - HIGHER ORDER OPENVSP ANALYSIS

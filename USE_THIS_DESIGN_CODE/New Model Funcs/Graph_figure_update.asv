@@ -23,7 +23,6 @@ end
 bar(missionSegments, BMF);
 xlabel('Mission Segment');
 ylabel('BMF');
-title('BMF variation over Mission Profile');
-%print('Mission Profile Visual', '-dpng', '-r300')
+title('BMF by M');
 
 end
