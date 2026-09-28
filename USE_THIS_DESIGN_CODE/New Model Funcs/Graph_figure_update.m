@@ -43,5 +43,9 @@ ax.FontSize = 18;
 ylabel('Power to Weight $\frac{P}{W}$ - $[\frac{hp}{lbm}]$', 'Interpreter', 'latex', FontSize=22)
 xlabel('Wing Loading $\frac{W}{S}$ - $[\frac{lbm}{ft^2}]$', Interpreter='latex', FontSize=22)
 title('Point Performance Evaluation of Current Design', FontSize=24)
-print('Point Performance DR1', '-dpng', '-r300')
+% print('Point Performance DR1', '-dpng', '-r300')
+
+%% Getting Noahs weight figures updated
+figure(700)
+print('Weight Figs', '-dpng', '-r300')
 end
