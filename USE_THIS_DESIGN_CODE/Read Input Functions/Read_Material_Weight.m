@@ -1,7 +1,12 @@
-function [Weight_Data,Weight_Sensitivity] = Read_Material_Weight(filename,Config_Row,Component_Row)
+function [Weight_Data,Weight_Sensitivity] = Read_Material_Weight(filename,Config_Row,Component_Row,WeightPlotsOn)
 % Selected-row material weights: lb, ft, ft^2, and density in lb/ft^3.
 % Config_Row selects geometry/airfoil data; Component_Row selects components.
 % Omit Component_Row to require matching configuration labels on all sheets.
+% WeightPlotsOn optionally controls plot creation and export (default: on).
+if nargin < 4
+    WeightPlotsOn = true;
+end
+validateattributes(WeightPlotsOn,{'numeric','logical'},{'scalar','binary'});
 D = readtable(filename,'Sheet','Main_Input','ReadRowNames',true);
 A = readtable(filename,'Sheet','Airfoil_Data','ReadRowNames',true);
 C = readtable(filename,'Sheet','Component_Data','ReadRowNames',true);
@@ -89,41 +94,38 @@ Weight_Sensitivity = table(W_empty,W_empty+lwplaSkinWeight,lwplaSkinWeight, ...
     'VariableNames',{'W_empty_nominal','W_empty_2x','Skin_weight_added'});
 Weight_Data.Properties.RowNames = D.Properties.RowNames;
 
-% Component breakdown for the selected configuration (before battery sizing).
-sparLabel = sprintf('%d Wing Spars',sparCount);
-if sparCount==1
-    sparLabel = '1 Wing Spar';
+if WeightPlotsOn
+    % Component breakdown for the selected configuration (before battery sizing).
+    sparLabel = sprintf('%d Wing Spars',sparCount);
+    if sparCount==1
+        sparLabel = '1 Wing Spar';
+    end
+    componentLabels = {'Nose','Fuselage','Wing','Horizontal Tail 1','Horizontal Tail 2', ...
+        'Vertical Tail 1','Vertical Tail 2',sparLabel,sprintf('%d Bulkheads',C.N_bulkhead(1)),'Payload','Ballast','Systems'};
+    [componentWeights,sortOrder] = sort(Weight_Data{1,3:end},'ascend');
+    sortOrder = sortOrder(componentWeights > 0);
+    componentWeights = componentWeights(componentWeights > 0);
+    componentLabels = componentLabels(sortOrder);
+    rows = 1:numel(componentWeights);
+
+    [~,ax] = weightPlotAxes('component');
+    barh(ax,componentWeights,0.65,'FaceColor',[0.20 0.45 0.75]);
+    set(ax,'YTick',rows,'YTickLabel',componentLabels, ...
+        'YDir','reverse','TickLabelInterpreter','none','FontSize',24, ...
+        'Box','off','Layer','bottom','Position',[0.27 0.18 0.66 0.68], ...
+        'XLim',[0 1.30*max(componentWeights)],'YLim',[0.5 numel(rows)+0.5], ...
+        'XGrid','on','YGrid','off','GridColor',[0.82 0.86 0.90],'GridAlpha',0.25);
+    text(ax,componentWeights,rows,compose('  %.2g lb',componentWeights), ...
+        'FontSize',26,'Color',[0.15 0.18 0.22]);
+    xtickformat(ax,'%.2g');
+    xlabel(ax,'Weight [lb]','FontSize',26);
+    title(ax,'JoyBringer Component Weight Breakdown','FontSize',24);
+    figuresFolder = fullfile(fileparts(fileparts(mfilename('fullpath'))),'figures');
+    if ~isfolder(figuresFolder)
+        mkdir(figuresFolder);
+    end
+    exportgraphics(ax,fullfile(figuresFolder,'component_weight_breakdown.png'),'Resolution',300);
 end
-componentLabels = {'Nose','Fuselage','Wing','Horizontal Tail 1','Horizontal Tail 2', ...
-    'Vertical Tail 1','Vertical Tail 2',sparLabel,sprintf('%d Bulkheads',C.N_bulkhead(1)),'Payload','Ballast','Systems'};
-componentWeights = Weight_Data{1,3:end};
-nonzeroComponents = componentWeights > 0;
-componentLabels = componentLabels(nonzeroComponents);
-componentWeights = componentWeights(nonzeroComponents);
-[componentWeights,sortOrder] = sort(componentWeights,'ascend');
-componentLabels = componentLabels(sortOrder);
-[~,ax] = weightPlotAxes('component');
-barh(ax,componentWeights,0.65,'FaceColor',[0.20 0.45 0.75]);
-set(ax,'YTick',1:numel(componentLabels),'YTickLabel',componentLabels, ...
-    'YDir','reverse','TickLabelInterpreter','none','FontSize',24, ...
-    'Box','off','Layer','bottom');
-ax.Position = [0.27 0.18 0.66 0.68];
-text(ax,componentWeights,1:numel(componentWeights),compose('  %.2g lb',componentWeights), ...
-    'FontSize',26,'Color',[0.15 0.18 0.22]);
-xlim(ax,[0 1.30*max(componentWeights)]);
-ylim(ax,[0.5 numel(componentWeights)+0.5]);
-xtickformat(ax,'%.2g');
-ax.XGrid = 'on';
-ax.YGrid = 'off';
-ax.GridColor = [0.82 0.86 0.90];
-ax.GridAlpha = 0.25;
-xlabel(ax,'Weight [lb]','FontSize',26);
-title(ax,'JoyBringer Component Weight Breakdown','FontSize',24);
-figuresFolder = fullfile(fileparts(fileparts(mfilename('fullpath'))),'figures');
-if ~isfolder(figuresFolder)
-    mkdir(figuresFolder);
-end
-exportgraphics(ax,fullfile(figuresFolder,'component_weight_breakdown.png'),'Resolution',300);
 end
 
 function weight = inputWeight(C,name)
