@@ -53,7 +53,8 @@ end
 Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 
 %Sizing Analysis
-WeightModelChoice = "Component"; % "Component" (fixed empty weight) or "Raymer" (iterated)
+WeightModelOn = 1; % 1 = Component (fixed empty weight), 0 = Raymer (iterated)
+WeightPlotsOn = 0; % 1 = show/export component weight plots, 0 = skip plots
 W_crew = 0; %lb
 W_pay_fixed = 8.8; %lb
 W_pay_drop = 0; %lb
@@ -81,10 +82,12 @@ msgs.warnings = [];
 disp(DragPolar_Model(config_row,:))
 
 %% Select the empty-weight model; use the same spreadsheet payload for both.
-WeightModelChoice = validatestring(WeightModelChoice,{'Component','Raymer'});
+validateattributes(WeightModelOn,{'numeric','logical'},{'scalar','binary'});
+WeightModelChoices = ["Raymer","Component"];
+WeightModelChoice = WeightModelChoices(WeightModelOn + 1);
 switch WeightModelChoice
     case 'Component'
-        [Weight_Data,Weight_Sensitivity] = Read_Material_Weight(Configuration_filename,config_row,component_row);
+        [Weight_Data,Weight_Sensitivity] = Read_Material_Weight(Configuration_filename,config_row,component_row,WeightPlotsOn);
         Design_Input.Material_Empty_lb = nan(height(Design_Input),1);
         Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty(1);
         Design_Input.Material_Empty_2x_lb = nan(height(Design_Input),1);
@@ -109,7 +112,7 @@ fprintf('Sizing weight model: %s | Payload: %.3f lb\n',WeightModelChoice,W_pay_f
 
 %%Mission Performance/Sizing Analysis
 MSN_Profile=Read_MSN_Profile(MissionProfile_filename,sheetnumber,ProfileName);
-[W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs);
+[W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn);
 % [RangeFactor_Data,M_eval_range,Alt_eval_range,RF_W] = RangeFactor(config_row,FinalWeightData,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data);
 displaySizingData(displayFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,MSN_Profile);
 outputfilename = writeSizingData(writeFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,DragPolar_Model,ProfileName,codeversion,outputfolder);

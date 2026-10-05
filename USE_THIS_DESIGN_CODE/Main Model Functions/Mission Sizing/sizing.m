@@ -1,4 +1,9 @@
-function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs)
+function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn)
+    % Optional toggle for component comparison plotting and export.
+    if nargin < 12
+        WeightPlotsOn = true;
+    end
+    validateattributes(WeightPlotsOn,{'numeric','logical'},{'scalar','binary'});
     %% Aircraft Design Mission Performance Sizing Analysis
     % ASEN 4138
     % Author: John Mah, Maggie Wussow, Jonathan Morris
@@ -264,35 +269,37 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
         fprintf('\nEmpty-weight estimates at common W0 = %.3f lb; only nominal Component model was iterated.\n',W0);
         disp(WeightComparison)
 
-        [fig,ax] = weightPlotAxes('comparison');
-        fig.Position = [100 100 1150 560];
-        bars = barh(ax,Empty_lb,0.72,'FaceColor','flat');
-        bars.CData = [0.23 0.62 0.38; 0.13 0.48 0.73; 0.91 0.52 0.16];
-        plotLabels = ["Component"; "2× LWPLA Skin"; replace(raymerLabel,":","")];
-        set(ax,'YTick',1:3,'YTickLabel',cellstr(plotLabels), ...
-            'YDir','reverse','TickLabelInterpreter','none','FontSize',22, ...
-            'Box','off','Layer','bottom');
-        ax.Position = [0.39 0.18 0.55 0.68];
-        text(ax,Empty_lb,1:3,compose('  %.2g lb',Empty_lb), ...
-            'FontSize',22,'Color',[0.15 0.18 0.22]);
-        xlim(ax,[0 1.20*max(Empty_lb)]);
-        ylim(ax,[0.5 3.5]);
-        xtickformat(ax,'%.2g');
-        ax.XGrid = 'on';
-        ax.YGrid = 'off';
-        ax.GridColor = [0.82 0.86 0.90];
-        ax.GridAlpha = 0.25;
-        xlabel(ax,'Battery Sizing Input Weight [lb]','FontSize',22);
-        plotTitle = title(ax,'Component Weight Model vs. Raymer UAV Estimate','FontSize',22);
-        plotTitle.Units = 'normalized';
-        titlePosition = plotTitle.Position;
-        titlePosition(1) = 0.34; % Center over the exported chart, including y-axis labels.
-        plotTitle.Position = titlePosition;
-        figuresFolder = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),'figures');
-        if ~isfolder(figuresFolder)
-            mkdir(figuresFolder);
+        if WeightPlotsOn
+            [fig,ax] = weightPlotAxes('comparison');
+            fig.Position = [100 100 1150 560];
+            bars = barh(ax,Empty_lb,0.72,'FaceColor','flat');
+            bars.CData = [0.23 0.62 0.38; 0.13 0.48 0.73; 0.91 0.52 0.16];
+            plotLabels = ["Component"; "2× LWPLA Skin"; replace(raymerLabel,":","")];
+            set(ax,'YTick',1:3,'YTickLabel',cellstr(plotLabels), ...
+                'YDir','reverse','TickLabelInterpreter','none','FontSize',22, ...
+                'Box','off','Layer','bottom');
+            ax.Position = [0.39 0.18 0.55 0.68];
+            text(ax,Empty_lb,1:3,compose('  %.2g lb',Empty_lb), ...
+                'FontSize',22,'Color',[0.15 0.18 0.22]);
+            xlim(ax,[0 1.20*max(Empty_lb)]);
+            ylim(ax,[0.5 3.5]);
+            xtickformat(ax,'%.2g');
+            ax.XGrid = 'on';
+            ax.YGrid = 'off';
+            ax.GridColor = [0.82 0.86 0.90];
+            ax.GridAlpha = 0.25;
+            xlabel(ax,'Battery Sizing Input Weight [lb]','FontSize',22);
+            plotTitle = title(ax,'Component Weight Model vs. Raymer UAV Estimate','FontSize',22);
+            plotTitle.Units = 'normalized';
+            titlePosition = plotTitle.Position;
+            titlePosition(1) = 0.34; % Center over the exported chart, including y-axis labels.
+            plotTitle.Position = titlePosition;
+            figuresFolder = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),'figures');
+            if ~isfolder(figuresFolder)
+                mkdir(figuresFolder);
+            end
+            exportgraphics(ax,fullfile(figuresFolder,'weight_comp.png'),'Resolution',300);
         end
-        exportgraphics(ax,fullfile(figuresFolder,'weight_comp.png'),'Resolution',300);
     end
 
     %%Data Tables for output.
