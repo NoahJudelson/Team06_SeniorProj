@@ -18,7 +18,7 @@ end
 % Making sure labels are unique
 missionSegments = FinalWeightData{:,1};
 for i=1:length(missionSegments)
-    if i == 8
+    if i == length(missionSegments)
         break
     elseif missionSegments(i) == missionSegments(i+1)
         missionSegments(i+1) = missionSegments(i+1) + '2';
@@ -33,19 +33,19 @@ title('BMF variation over Mission Profile', FontSize=24);
 %print('Mission Profile Visual', '-dpng', '-r300')
 
 %% Fixing Figure 1 for DR1
-pp = figure(1);
-pp.Units = 'inches';
-pp.Position=[1,1,16,9];
-xlim([0,8])
-ylim([0,1])
-ax = gca;
-ax.FontSize = 18;
-ylabel('Power to Weight $\frac{P}{W}$ - $[\frac{hp}{lbm}]$', 'Interpreter', 'latex', FontSize=22)
-xlabel('Wing Loading $\frac{W}{S}$ - $[\frac{lbm}{ft^2}]$', Interpreter='latex', FontSize=22)
-title('Point Performance Evaluation of Current Design', FontSize=24)
-% print('Point Performance DR1', '-dpng', '-r300')
-
-%% Getting Noahs weight figures updated
-figure(700)
-print('Weight Figs', '-dpng', '-r300')
+% pp = figure(1);
+% pp.Units = 'inches';
+% pp.Position=[1,1,16,9];
+% xlim([0,8])
+% ylim([0,1])
+% ax = gca;
+% ax.FontSize = 18;
+% ylabel('Power to Weight $\frac{P}{W}$ - $[\frac{hp}{lbm}]$', 'Interpreter', 'latex', FontSize=22)
+% xlabel('Wing Loading $\frac{W}{S}$ - $[\frac{lbm}{ft^2}]$', Interpreter='latex', FontSize=22)
+% title('Point Performance Evaluation of Current Design', FontSize=24)
+% % print('Point Performance DR1', '-dpng', '-r300')
+% 
+% %% Getting Noahs weight figures updated
+% figure(700)
+% print('Weight Figs', '-dpng', '-r300')
 end
