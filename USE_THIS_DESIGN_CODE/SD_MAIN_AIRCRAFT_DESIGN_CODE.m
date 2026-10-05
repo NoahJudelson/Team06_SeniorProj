@@ -61,14 +61,14 @@ W0_guess=(55-8.8); % lbs
 config_row=1; %Geometric definition row number not including header (in design configuration spreadsheet file)
 component_row=1; % Component_Data: aircraft inputs in Excel row 2.
 MissionProfile_filename="SD_Mission_Profile_Preliminary_Design.xlsx";
-sheetnumber=2; %Mission profile sheet number (Mission_Profile_Template.xlsx) - 1 is the template
+sheetnumber=3; %Mission profile sheet number (Mission_Profile_Template.xlsx) - 1 is the template
 ProfileName="JB_V1_FP";
 writeFlag=true;
 displayFlag=true;% flag for displaying additional iteration and segment data
 
 %Point Performance
 Requirements_filename="ZW_Snr_Proj_Requirements_Input.xlsx";
-sheetnumber_req=2; % Template is sheet 1
+sheetnumber_req=3; % Template is sheet 1
 RequirementName="JB_V1";
 W_S_range = linspace(0,20,100); % X - lim of figure 1
 
