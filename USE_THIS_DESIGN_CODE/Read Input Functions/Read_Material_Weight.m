@@ -1,8 +1,8 @@
 function [Weight_Data,Weight_Sensitivity] = Read_Material_Weight(filename,Config_Row,Component_Row,WeightPlotsOn)
-% Selected-row material weights: lb, ft, ft^2, and density in lb/ft^3.
-% Config_Row selects geometry/airfoil data; Component_Row selects components.
-% Omit Component_Row to require matching configuration labels on all sheets.
-% WeightPlotsOn optionally controls plot creation and export (default: on).
+% Component weights in lb; geometry in ft/ft^2; density in lb/ft^3.
+% Positive entered weights override estimates. Blank weights mean zero.
+% Omit Component_Row to require matching labels across all three sheets.
+% WeightPlotsOn defaults to true; false skips plotting and PNG export.
 if nargin < 4
     WeightPlotsOn = true;
 end
@@ -10,161 +10,114 @@ validateattributes(WeightPlotsOn,{'numeric','logical'},{'scalar','binary'});
 D = readtable(filename,'Sheet','Main_Input','ReadRowNames',true);
 A = readtable(filename,'Sheet','Airfoil_Data','ReadRowNames',true);
 C = readtable(filename,'Sheet','Component_Data','ReadRowNames',true);
-separateComponentRow = nargin>=3;
-if ~separateComponentRow
+if nargin < 3
     Component_Row = Config_Row;
 end
 validateattributes(Config_Row,{'numeric'},{'scalar','integer','positive','<=',min(height(D),height(A))});
 validateattributes(Component_Row,{'numeric'},{'scalar','integer','positive','<=',height(C)});
 assert(strcmp(D.Properties.RowNames{Config_Row},A.Properties.RowNames{Config_Row}), ...
     'MaterialWeight:Configuration','Main_Input and Airfoil_Data labels must match at the selected row.');
-if ~separateComponentRow
+if nargin < 3
     assert(strcmp(D.Properties.RowNames{Config_Row},C.Properties.RowNames{Component_Row}), ...
         'MaterialWeight:Configuration','Component_Data label differs. Supply its row as the third argument.');
 end
 D = D(Config_Row,:);
 C = C(Component_Row,:);
 
-% Structural components share one shell equation and independent thicknesses.
-keys = {'fuse','wing','h1','h2','v1','v2'};
-materials = {'Fuse_Mat','Wing_Mat','h1_Mat','h2_Mat','v1_Mat','v2_Mat'};
-areas = {'Swet_f','Swet_w','Swet_h1','Swet_h2','Swet_v1','Swet_v2'};
-thicknesses = {'Thick_f','SkinThick_w','SkinThick_h1','SkinThick_h2','SkinThick_v1','SkinThick_v2'};
-structuralWeights = zeros(1,6);
-lwplaSkinWeight = 0;
-for k = 1:numel(keys)
-    weight = inputWeight(C,['W_' keys{k}]);
-    if weight==0 && k>=3
-        area = D.(['Sref_' keys{k}])(1);
-        validateattributes(area,{'numeric'},{'scalar','real','finite','nonnegative'});
-        if area==0
-            continue % An unmeasured tail with no area is absent.
-        end
-    end
-    measured = weight>0;
-    weight = componentWeight(D,C,weight,materials{k},areas{k},thicknesses{k});
-    if ~measured && strcmp(string(C.(materials{k})(1)),"rho_LWPLA")
-        lwplaSkinWeight = lwplaSkinWeight + weight;
-    end
-    structuralWeights(k) = weight;
-end
+% Read all entered weights once; normalize blanks before doing arithmetic.
+weightNames = {'W_nose','W_fuse','W_wing','W_h1','W_h2','W_v1','W_v2', ...
+    'W_wing_spar','W_bulkhead','W_pay','W_ballast','W_systems'};
+entered = C{1,weightNames};
+entered(ismissing(entered)) = 0;
+validateattributes(entered,{'numeric'},{'real','finite','nonnegative'});
+C{1,weightNames} = entered;
 
-% Solid bulkhead prisms: count * width * height * depth * density.
-bulkheadWeight = inputWeight(C,'W_bulkhead');
-if bulkheadWeight==0
-    count = C.N_bulkhead(1);
-    panelWidth = C.Width_bulkhead(1);
-    panelHeight = C.Height_bulkhead(1);
-    panelDepth = C.Depth_bulkhead(1);
-    material = char(string(C.Bulkhead_Mat(1)));
-    assert(ismember(material,C.Properties.VariableNames), ...
-        'MaterialWeight:BulkheadMaterial','Bulkhead_Mat must name a density column.');
-    density = C.(material)(1);
-    validateattributes(count,{'numeric'},{'scalar','integer','nonnegative'},mfilename,'N_bulkhead');
-    validateattributes(panelWidth,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,'Width_bulkhead');
-    validateattributes(panelHeight,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,'Height_bulkhead');
-    validateattributes(panelDepth,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,'Depth_bulkhead');
-    validateattributes(density,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,material);
-    bulkheadWeight = count*panelWidth*panelHeight*panelDepth*density;
-end
-% Spar input is the weight of one spar; the spreadsheet sets the count.
+% Shells: measured weight, or 1.05 * density * wetted area * thickness.
+% Each shell also returns the extra weight when its LWPLA thickness doubles.
+[W_f,F_added] = shellWeight(D,C,'W_fuse','Fuse_Mat','Swet_f','Thick_f');
+[W_w,W_added] = shellWeight(D,C,'W_wing','Wing_Mat','Swet_w','SkinThick_w');
+[W_h1,H1_added] = shellWeight(D,C,'W_h1','h1_Mat','Swet_h1','SkinThick_h1','Sref_h1');
+[W_h2,H2_added] = shellWeight(D,C,'W_h2','h2_Mat','Swet_h2','SkinThick_h2','Sref_h2');
+[W_v1,V1_added] = shellWeight(D,C,'W_v1','v1_Mat','Swet_v1','SkinThick_v1','Sref_v1');
+[W_v2,V2_added] = shellWeight(D,C,'W_v2','v2_Mat','Swet_v2','SkinThick_v2','Sref_v2');
+
+% W_wing_spar is the measured weight of one spar.
 assert(ismember('N_wing_spar',C.Properties.VariableNames), ...
     'MaterialWeight:MissingSparCount','Component_Data needs an N_wing_spar column.');
-sparCount = C.N_wing_spar(1);
-validateattributes(sparCount,{'numeric'},{'scalar','integer','nonnegative','finite'},mfilename,'N_wing_spar');
-sparWeight = sparCount*inputWeight(C,'W_wing_spar');
+validateattributes(C.N_wing_spar,{'numeric'},{'scalar','integer','finite','nonnegative'});
+W_wing_spar = C.N_wing_spar * C.W_wing_spar;
 
-% Nose, payload, ballast and systems are direct inputs (blank means zero).
-% A zero nose weight means the nose is included in the fuselage shell.
-directKeys = {'nose','pay','ballast','systems'};
-directWeights = zeros(1,4);
-for k = 1:numel(directKeys)
-    directWeights(k) = inputWeight(C,['W_' directKeys{k}]);
+% Bulkheads are solid rectangular prisms, unless their total is measured.
+W_bulkhead = C.W_bulkhead;
+if W_bulkhead == 0
+    material = char(string(C.Bulkhead_Mat));
+    assert(ismember(material,C.Properties.VariableNames), ...
+        'MaterialWeight:BulkheadMaterial','Bulkhead_Mat must name a density column.');
+    density = C.(material);
+    validateattributes(C.N_bulkhead,{'numeric'},{'scalar','integer','finite','nonnegative'});
+    dimensions = [C.Width_bulkhead C.Height_bulkhead C.Depth_bulkhead density];
+    validateattributes(dimensions,{'numeric'},{'real','finite','nonnegative'});
+    W_bulkhead = C.N_bulkhead * C.Width_bulkhead * C.Height_bulkhead * C.Depth_bulkhead * density;
 end
-weights = [directWeights(1) structuralWeights sparWeight bulkheadWeight directWeights(3:4)];
-W_pay = directWeights(2);
-W_empty = sum(weights);
-assert(W_empty>0,'MaterialWeight:InvalidInput','Empty weight must be positive.');
-Wo = W_empty+W_pay;
 
-Weight_Data = array2table([Wo W_empty weights(1:9) W_pay weights(10:11)], ...
-    'VariableNames',{'Wo','W_empty','W_nose','W_f','W_w','W_h1','W_h2','W_v1','W_v2','W_wing_spar','W_bulkhead','W_pay','W_ballast','W_systems'});
-% 2x LWPLA skin-thickness sensitivity case; nominal sizing is unchanged.
-Weight_Sensitivity = table(W_empty,W_empty+lwplaSkinWeight,lwplaSkinWeight, ...
-    'VariableNames',{'W_empty_nominal','W_empty_2x','Skin_weight_added'});
+% Payload and the mission battery are excluded from empty weight.
+W_empty = C.W_nose + W_f + W_w + W_h1 + W_h2 + W_v1 + W_v2 ...
+    + W_wing_spar + W_bulkhead + C.W_ballast + C.W_systems;
+assert(W_empty>0,'MaterialWeight:InvalidInput','Empty weight must be positive.');
+Wo = W_empty + C.W_pay;
+Weight_Data = table(Wo,W_empty,C.W_nose,W_f,W_w,W_h1,W_h2,W_v1,W_v2, ...
+    W_wing_spar,W_bulkhead,C.W_pay,C.W_ballast,C.W_systems, ...
+    'VariableNames',{'Wo','W_empty','W_nose','W_f','W_w','W_h1','W_h2','W_v1','W_v2', ...
+    'W_wing_spar','W_bulkhead','W_pay','W_ballast','W_systems'});
 Weight_Data.Properties.RowNames = D.Properties.RowNames;
+Skin_weight_added = F_added + W_added + H1_added + H2_added + V1_added + V2_added;
+Weight_Sensitivity = table(W_empty,W_empty+Skin_weight_added,Skin_weight_added, ...
+    'VariableNames',{'W_empty_nominal','W_empty_2x','Skin_weight_added'});
 
 if WeightPlotsOn
-    % Component breakdown for the selected configuration (before battery sizing).
-    sparLabel = sprintf('%d Wing Spars',sparCount);
-    if sparCount==1
-        sparLabel = '1 Wing Spar';
-    end
-    componentLabels = {'Nose','Fuselage','Wing','Horizontal Tail 1','Horizontal Tail 2', ...
-        'Vertical Tail 1','Vertical Tail 2',sparLabel,sprintf('%d Bulkheads',C.N_bulkhead(1)),'Payload','Ballast','Systems'};
-    [componentWeights,sortOrder] = sort(Weight_Data{1,3:end},'ascend');
-    sortOrder = sortOrder(componentWeights > 0);
-    componentWeights = componentWeights(componentWeights > 0);
-    componentLabels = componentLabels(sortOrder);
-    rows = 1:numel(componentWeights);
-
-    [~,ax] = weightPlotAxes('component');
-    barh(ax,componentWeights,0.65,'FaceColor',[0.20 0.45 0.75]);
-    set(ax,'YTick',rows,'YTickLabel',componentLabels, ...
-        'YDir','reverse','TickLabelInterpreter','none','FontSize',24, ...
-        'Box','off','Layer','bottom','Position',[0.27 0.18 0.66 0.68], ...
-        'XLim',[0 1.30*max(componentWeights)],'YLim',[0.5 numel(rows)+0.5], ...
-        'XGrid','on','YGrid','off','GridColor',[0.82 0.86 0.90],'GridAlpha',0.25);
-    text(ax,componentWeights,rows,compose('  %.2g lb',componentWeights), ...
-        'FontSize',26,'Color',[0.15 0.18 0.22]);
-    xtickformat(ax,'%.2g');
-    xlabel(ax,'Weight [lb]','FontSize',26);
-    title(ax,'JoyBringer Component Weight Breakdown','FontSize',24);
-    figuresFolder = fullfile(fileparts(fileparts(mfilename('fullpath'))),'figures');
-    if ~isfolder(figuresFolder)
-        mkdir(figuresFolder);
-    end
-    exportgraphics(ax,fullfile(figuresFolder,'component_weight_breakdown.png'),'Resolution',300);
+    plotComponentWeights(Weight_Data,C.N_wing_spar,C.N_bulkhead);
 end
 end
 
-function weight = inputWeight(C,name)
-weight = C.(name)(1);
-if ismissing(weight)
-    weight = 0;
-end
-validateattributes(weight,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,name);
-end
-
-function weight = componentWeight(D,C,weight,materialName,areaName,thicknessName)
-if weight>0
-    return % Measured weight bypasses geometry/material inputs and the 1.05 factor.
-end
-area = D.(areaName)(1);
-validateattributes(area,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,areaName);
-if area==0
+function [weight,added] = shellWeight(D,C,weightName,materialName,areaName,thicknessName,tailAreaName)
+weight = C.(weightName);
+added = 0;
+if weight > 0
     return
 end
-material = char(string(C.(materialName)(1)));
-density = C.(material)(1);
-validateattributes(density,{'numeric'},{'scalar','real','finite','nonnegative'},mfilename,material);
-weight = density * area * skinThickness(C,thicknessName) * 1.05;
-validateattributes(weight,{'numeric'},{'scalar','real','finite','nonnegative'});
+% A tail with zero reference area is absent; its material inputs are unused.
+if nargin == 7
+    validateattributes(D.(tailAreaName),{'numeric'},{'scalar','real','finite','nonnegative'});
+    if D.(tailAreaName) == 0
+        return
+    end
 end
+area = D.(areaName);
+validateattributes(area,{'numeric'},{'scalar','real','finite','nonnegative'});
+if area == 0
+    return
+end
+material = char(string(C.(materialName)));
+density = C.(material);
+validateattributes(density,{'numeric'},{'scalar','real','finite','nonnegative'});
 
-function thickness = skinThickness(C,name)
-DEFAULT_SKIN_THICKNESS_FT = 0.0025 / 0.3048;
-thickness = DEFAULT_SKIN_THICKNESS_FT;
-if ismember(name,C.Properties.VariableNames)
-    value = C.(name)(1);
+% Missing or invalid thickness uses the original 2.5 mm default in feet.
+thickness = 0.0025 / 0.3048;
+if ismember(thicknessName,C.Properties.VariableNames)
+    value = C.(thicknessName);
     if iscell(value)
         value = value{1};
     end
     if isstring(value) || ischar(value)
         value = str2double(value);
     end
-    if isnumeric(value) && isscalar(value) && isreal(value) && isfinite(value) && value>0
+    if isnumeric(value) && isscalar(value) && isreal(value) && isfinite(value) && value > 0
         thickness = value;
     end
+end
+weight = density * area * thickness * 1.05;
+validateattributes(weight,{'numeric'},{'scalar','real','finite','nonnegative'});
+if strcmp(material,'rho_LWPLA')
+    added = weight;
 end
 end

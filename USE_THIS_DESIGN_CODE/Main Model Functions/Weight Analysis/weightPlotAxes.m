@@ -1,29 +1,17 @@
 function [fig,ax] = weightPlotAxes(plotName)
-%WEIGHTPLOTAXES Keep the two weight plots in tabs of one figure window.
+% Keep component and comparison plots in two tabs of figure 700.
 plotName = validatestring(plotName,{'component','comparison'});
-
-% Remove the old standalone comparison figure when rerunning a section.
-delete(findall(groot,'Type','figure','Number',710));
-fig = findall(groot,'Type','figure','Tag','JoyBringerWeightPlots');
-if isempty(fig)
-    delete(findall(groot,'Type','figure','Number',700));
-    fig = figure(700);
+fig = figure(700);
+if ~strcmp(fig.Tag,'JoyBringerWeightPlots')
+    clf(fig);
     set(fig,'Name','JoyBringer Weight Plots','Tag','JoyBringerWeightPlots', ...
         'WindowStyle','normal','Position',[100 100 1350 820]);
-    tabs = uitabgroup(fig,'Units','normalized','Position',[0 0 1 1]);
-    componentTab = uitab(tabs,'Title','Component breakdown');
-    comparisonTab = uitab(tabs,'Title','Raymer comparison');
-    componentAxes = axes('Parent',componentTab);
-    comparisonAxes = axes('Parent',comparisonTab);
-    setappdata(fig,'WeightPlotAxes',[componentAxes comparisonAxes]);
+    tabs = uitabgroup(fig);
+    axes('Parent',uitab(tabs,'Title','Component breakdown'),'Tag','component');
+    axes('Parent',uitab(tabs,'Title','Raymer comparison'),'Tag','comparison');
 end
-
-plotAxes = getappdata(fig,'WeightPlotAxes');
-if strcmp(plotName,'component')
-    ax = plotAxes(1);
-else
-    ax = plotAxes(2);
-end
-cla(ax,'reset');
+ax = findobj(fig,'Type','axes','Tag',plotName);
+cla(ax,'reset'); % Reset only this tab and preserve the other plot.
+ax.Tag = plotName;
 ax.Parent.Parent.SelectedTab = ax.Parent;
 end

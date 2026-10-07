@@ -4,7 +4,7 @@ root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
 addpath(fullfile(root,'Read Input Functions'));
 source = [tempname '.xlsx'];
 target = [tempname '.xlsx'];
-cleanup = onCleanup(@() removeFiles(source,target)); %#ok<NASGU>
+cleanup = onCleanup(@() removeFiles(source,target));
 D = table(["Unused";"Aircraft"],[NaN;10],[NaN;2],[NaN;4], ...
     [NaN;1],[NaN;0],[NaN;0],[NaN;0],[NaN;0],[NaN;0], ...
     'VariableNames',{'Config','Swet_f','Sref_w','AR_w','Taper_w', ...
@@ -33,7 +33,7 @@ C.Height_bulkhead(2) = 0.35;
 C.Depth_bulkhead(2) = 0.01;
 C.rho_LW_balsa(2) = 5.5;
 writetable(C,target,'Sheet','Component_Data');
-[W,S] = Read_Material_Weight(target,2);
+[W,S] = Read_Material_Weight(target,2,2,false);
 expectedF = 10*10*0.1*1.05;
 expectedWing = 10*sqrt(2)*0.1*1.05;
 expectedBulkhead = 3*0.30*0.35*0.01*5.5;
@@ -48,18 +48,46 @@ assert(abs(S.W_empty_2x-W.W_empty-expectedF-expectedWing)<1e-10);
 C.Wing_Mat(2) = "rho_LW_balsa";
 C.rho_LW_balsa(2) = 10;
 writetable(C,target,'Sheet','Component_Data');
-[W,S] = Read_Material_Weight(target,2);
+[W,S] = Read_Material_Weight(target,2,2,false);
 assert(abs(S.W_empty_2x-W.W_empty-expectedF)<1e-10);
 C.W_fuse(2) = 1;
 C.W_wing(2) = 2;
 writetable(C,target,'Sheet','Component_Data');
-[W,S] = Read_Material_Weight(target,2);
+[W,S] = Read_Material_Weight(target,2,2,false);
 assert(abs(W.W_empty-(4+2*0.293+3*0.30*0.35*0.01*10))<1e-10);
 assert(S.W_empty_2x==W.W_empty);
 C.W_bulkhead(2) = 0.5;
 writetable(C,target,'Sheet','Component_Data');
-[W,~] = Read_Material_Weight(target,2);
+[W,~] = Read_Material_Weight(target,2,2,false);
 assert(W.W_bulkhead==0.5);
+
+% Invalid or omitted shell thickness falls back to 2.5 mm, converted to ft.
+C.W_fuse(2) = 0;
+C.W_wing(2) = 0;
+C.Thick_f(2) = NaN;
+C.SkinThick_w(2) = 0;
+writetable(C,target,'Sheet','Component_Data');
+[W,S] = Read_Material_Weight(target,2,2,false);
+defaultThickness = 0.0025/0.3048;
+assert(abs(W.W_f-10*10*defaultThickness*1.05)<1e-10);
+assert(abs(W.W_w-10*sqrt(2)*defaultThickness*1.05)<1e-10);
+assert(abs(S.Skin_weight_added-W.W_f)<1e-10);
+C.Thick_f = [];
+C.SkinThick_w = [];
+% Use a fresh workbook so removed columns do not remain in the Excel sheet.
+delete(target);
+writetable(D,target,'Sheet','Main_Input');
+writetable(A,target,'Sheet','Airfoil_Data');
+writetable(C,target,'Sheet','Component_Data');
+[W_missing,S_missing] = Read_Material_Weight(target,2,2,false);
+assert(isequal(W,W_missing) && isequal(S,S_missing));
+
+% A measured tail bypasses absent geometry and blank material inputs.
+C.W_h1(2) = 0.25;
+writetable(C,target,'Sheet','Component_Data');
+[W_tail,S_tail] = Read_Material_Weight(target,2,2,false);
+assert(W_tail.W_h1==0.25 && abs(W_tail.W_empty-W.W_empty-0.25)<1e-10);
+assert(S_tail.Skin_weight_added==S.Skin_weight_added);
 
 % Without an explicit component row, configuration labels must match.
 writetable(C([2 1],:),target,'Sheet','Component_Data');
