@@ -1,7 +1,13 @@
-function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn)
-    % Optional toggle for component comparison plotting and export.
+function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn,materialEmptyWeight,twoXEmptyWeight)
+    % Optional plotting flag and component empty weights in lb; omitted weights select Raymer.
     if nargin < 12
         WeightPlotsOn = true;
+    end
+    if nargin < 13
+        materialEmptyWeight = [];
+    end
+    if nargin < 14
+        twoXEmptyWeight = materialEmptyWeight;
     end
     validateattributes(WeightPlotsOn,{'numeric','logical'},{'scalar','binary'});
     %% Aircraft Design Mission Performance Sizing Analysis
@@ -110,14 +116,10 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
     %% MISSION ANALYSIS ITERATIVE SIZING
     %Set Convergence Criteria
 
-    % Read_Material_Weight supplies an empty-weight estimate in pounds.
-    useMaterialWeight = (istable(Design_Input) && ...
-        ismember('Material_Empty_lb', Design_Input.Properties.VariableNames)) || ...
-        (isstruct(Design_Input) && isfield(Design_Input, 'Material_Empty_lb'));
+    useMaterialWeight = ~isempty(materialEmptyWeight);
     if useMaterialWeight
-        materialEmptyWeight = Design_Input.Material_Empty_lb(Config_Row);
-        validateattributes(materialEmptyWeight, {'numeric'}, ...
-            {'scalar','real','finite','positive'}, mfilename, 'Material_Empty_lb');
+        validateattributes(materialEmptyWeight,{'numeric'},{'scalar','real','finite','positive'});
+        validateattributes(twoXEmptyWeight,{'numeric'},{'scalar','real','finite','>=',materialEmptyWeight});
         % Total weight cannot start below the fixed empty weight and payload.
         W0_guess = max(W0_guess,materialEmptyWeight+W_crew+W_pay_fixed+W_pay_drop);
     else
@@ -240,14 +242,6 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
     
     %% Raymer UAV weight comparison at the nominal component-sized gross weight.
     if useMaterialWeight
-        twoXEmptyWeight = materialEmptyWeight;
-        if istable(Design_Input) && ismember('Material_Empty_2x_lb',Design_Input.Properties.VariableNames)
-            twoXEmptyWeight = Design_Input.Material_Empty_2x_lb(Config_Row);
-        elseif isstruct(Design_Input) && isfield(Design_Input,'Material_Empty_2x_lb')
-            twoXEmptyWeight = Design_Input.Material_Empty_2x_lb(Config_Row);
-        end
-        validateattributes(twoXEmptyWeight,{'numeric'}, ...
-            {'scalar','real','finite','>=',materialEmptyWeight},mfilename,'Material_Empty_2x_lb');
         if startsWith(string(PropType),"PROP_")
             uavCategory = "UAV_Prop";
             loadingR = PA_shp_sl/W0;
@@ -270,35 +264,13 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
         disp(WeightComparison)
 
         if WeightPlotsOn
-            [fig,ax] = weightPlotAxes('comparison');
-            fig.Position = [100 100 1150 560];
-            bars = barh(ax,Empty_lb,0.72,'FaceColor','flat');
-            bars.CData = [0.23 0.62 0.38; 0.13 0.48 0.73; 0.91 0.52 0.16];
+            figure(710); clf;
+            barh(Empty_lb);
             plotLabels = ["Component"; "2× LWPLA Skin"; replace(raymerLabel,":","")];
-            set(ax,'YTick',1:3,'YTickLabel',cellstr(plotLabels), ...
-                'YDir','reverse','TickLabelInterpreter','none','FontSize',22, ...
-                'Box','off','Layer','bottom');
-            ax.Position = [0.39 0.18 0.55 0.68];
-            text(ax,Empty_lb,1:3,compose('  %.2g lb',Empty_lb), ...
-                'FontSize',22,'Color',[0.15 0.18 0.22]);
-            xlim(ax,[0 1.20*max(Empty_lb)]);
-            ylim(ax,[0.5 3.5]);
-            xtickformat(ax,'%.2g');
-            ax.XGrid = 'on';
-            ax.YGrid = 'off';
-            ax.GridColor = [0.82 0.86 0.90];
-            ax.GridAlpha = 0.25;
-            xlabel(ax,'Battery Sizing Input Weight [lb]','FontSize',22);
-            plotTitle = title(ax,'Component Weight Model vs. Raymer UAV Estimate','FontSize',22);
-            plotTitle.Units = 'normalized';
-            titlePosition = plotTitle.Position;
-            titlePosition(1) = 0.34; % Center over the exported chart, including y-axis labels.
-            plotTitle.Position = titlePosition;
-            figuresFolder = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))),'figures');
-            if ~isfolder(figuresFolder)
-                mkdir(figuresFolder);
-            end
-            exportgraphics(ax,fullfile(figuresFolder,'weight_comp.png'),'Resolution',300);
+            set(gca,'YTick',1:3,'YTickLabel',cellstr(plotLabels),'YDir','reverse');
+            text(Empty_lb,1:3,compose('  %.2g lb',Empty_lb));
+            xlabel('Battery Sizing Input Weight [lb]');
+            title('Component Weight Model vs. Raymer UAV Estimate');
         end
     end
 

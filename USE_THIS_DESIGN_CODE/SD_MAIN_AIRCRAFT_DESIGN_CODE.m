@@ -54,7 +54,7 @@ Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 
 %Sizing Analysis
 WeightModelOn = 1; % 1 = Component (fixed empty weight), 0 = Raymer (iterated)
-WeightPlotsOn = 0; % 1 = show/export component weight plots, 0 = skip plots
+WeightPlotsOn = 0; % 1 = show weight plots, 0 = skip plots
 W_crew = 0; %lb
 W_pay_fixed = 8.8; %lb
 W_pay_drop = 0; %lb
@@ -81,38 +81,31 @@ msgs.warnings = [];
 [Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,msgs]=aero_analysis(Configuration_filename,msgs);
 disp(DragPolar_Model(config_row,:))
 
-%% Select the empty-weight model; use the same spreadsheet payload for both.
+%% Select the empty-weight model; pass scalar empty weights to sizing.
 validateattributes(WeightModelOn,{'numeric','logical'},{'scalar','binary'});
-WeightModelChoices = ["Raymer","Component"];
-WeightModelChoice = WeightModelChoices(WeightModelOn + 1);
-switch WeightModelChoice
-    case 'Component'
-        [Weight_Data,Weight_Sensitivity] = Read_Material_Weight(Configuration_filename,config_row,component_row,WeightPlotsOn);
-        Design_Input.Material_Empty_lb = nan(height(Design_Input),1);
-        Design_Input.Material_Empty_lb(config_row) = Weight_Data.W_empty(1);
-        Design_Input.Material_Empty_2x_lb = nan(height(Design_Input),1);
-        Design_Input.Material_Empty_2x_lb(config_row) = Weight_Sensitivity.W_empty_2x(1);
-        W_pay_fixed = Weight_Data.W_pay(1);
-        disp(Weight_Data)
-    case 'Raymer'
-        % Read payload only: material densities, thicknesses and CGs are unused.
-        Component_Input = readtable(Configuration_filename,'Sheet','Component_Data','ReadRowNames',true);
-        validateattributes(component_row,{'numeric'}, ...
-            {'scalar','integer','positive','<=',height(Component_Input)});
-        W_pay_fixed = Component_Input.W_pay(component_row);
+W_empty = [];
+W_empty_2x = [];
+if WeightModelOn
+    [W_empty,W_empty_2x,W_pay_fixed] = Read_Material_Weight(Configuration_filename,config_row,component_row,WeightPlotsOn);
+    WeightModelChoice = 'Component';
+else
+    WeightModelChoice = 'Raymer';
+    % Use spreadsheet payload when available; other Raymer workbooks use W_pay_fixed above.
+    if any(strcmp(sheetnames(Configuration_filename),'Component_Data'))
+        C = readtable(Configuration_filename,'Sheet','Component_Data','ReadRowNames',true);
+        validateattributes(component_row,{'numeric'},{'scalar','integer','positive','<=',height(C)});
+        W_pay_fixed = C.W_pay(component_row);
         if ismissing(W_pay_fixed)
             W_pay_fixed = 0;
         end
         validateattributes(W_pay_fixed,{'numeric'},{'scalar','real','finite','nonnegative'});
-        if ismember('Material_Empty_lb',Design_Input.Properties.VariableNames)
-            Design_Input.Material_Empty_lb = []; % Select the existing Raymer sizing path.
-        end
+    end
 end
 fprintf('Sizing weight model: %s | Payload: %.3f lb\n',WeightModelChoice,W_pay_fixed);
 
 %%Mission Performance/Sizing Analysis
 MSN_Profile=Read_MSN_Profile(MissionProfile_filename,sheetnumber,ProfileName);
-[W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn);
+[W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn,W_empty,W_empty_2x);
 % [RangeFactor_Data,M_eval_range,Alt_eval_range,RF_W] = RangeFactor(config_row,FinalWeightData,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data);
 displaySizingData(displayFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,MSN_Profile);
 outputfilename = writeSizingData(writeFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,DragPolar_Model,ProfileName,codeversion,outputfolder);
