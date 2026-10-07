@@ -1,4 +1,4 @@
-function [W_empty,W_empty_2x,W_pay] = Read_Material_Weight(filename,Config_Row,Component_Row,WeightPlotsOn)
+function [W_empty,W_pay] = Read_Material_Weight(filename,Config_Row,Component_Row,WeightPlotsOn)
 % Weights in lb; density in lb/ft^3; wetted area in ft^2; thickness in ft.
 if nargin < 4
     WeightPlotsOn = true;
@@ -8,29 +8,21 @@ if nargin < 3
 end
 validateattributes(WeightPlotsOn,{'numeric','logical'},{'scalar','binary'});
 D = readtable(filename,'Sheet','Main_Input','ReadRowNames',true);
-A = readtable(filename,'Sheet','Airfoil_Data','ReadRowNames',true);
 C = readtable(filename,'Sheet','Component_Data','ReadRowNames',true);
-validateattributes(Config_Row,{'numeric'},{'scalar','integer','positive','<=',min(height(D),height(A))});
+validateattributes(Config_Row,{'numeric'},{'scalar','integer','positive','<=',height(D)});
 validateattributes(Component_Row,{'numeric'},{'scalar','integer','positive','<=',height(C)});
-assert(strcmp(D.Properties.RowNames{Config_Row},A.Properties.RowNames{Config_Row}), ...
-    'MaterialWeight:Configuration','Main_Input and Airfoil_Data labels must match at the selected row.');
-if nargin < 3
-    assert(strcmp(D.Properties.RowNames{Config_Row},C.Properties.RowNames{Component_Row}), ...
-        'MaterialWeight:Configuration','Component_Data label differs. Supply its row as the third argument.');
-end
 D = D(Config_Row,:);
 C = C(Component_Row,:);
 
-% Order: nose, six shells, spars, bulkheads, payload, ballast, systems.
+% Empty-weight components: nose, six shells, spars, bulkheads, ballast, systems.
 weights = C{1,{'W_nose','W_fuse','W_wing','W_h1','W_h2','W_v1','W_v2', ...
-    'W_wing_spar','W_bulkhead','W_pay','W_ballast','W_systems'}};
+    'W_wing_spar','W_bulkhead','W_ballast','W_systems'}};
 weights(ismissing(weights)) = 0; % Intentionally blank weight inputs mean zero.
 validateattributes(weights,{'numeric'},{'real','finite','nonnegative'});
 materialNames = {'Fuse_Mat','Wing_Mat','h1_Mat','h2_Mat','v1_Mat','v2_Mat'};
 areaNames = {'Swet_f','Swet_w','Swet_h1','Swet_h2','Swet_v1','Swet_v2'};
 thicknessNames = {'Thick_f','SkinThick_w','SkinThick_h1','SkinThick_h2','SkinThick_v1','SkinThick_v2'};
 tailAreaNames = {'Sref_h1','Sref_h2','Sref_v1','Sref_v2'};
-extraSkinWeight = 0;
 for k = 1:6
     if weights(k+1) > 0
         continue % A measured shell bypasses geometry, material and margin.
@@ -55,21 +47,14 @@ for k = 1:6
     thickness = 0.0025/0.3048; % Original 2.5 mm default, converted to ft.
     if ismember(thicknessNames{k},C.Properties.VariableNames)
         value = C{1,thicknessNames{k}};
-        if iscell(value)
-            value = value{1};
-        end
-        if ischar(value) || isstring(value)
-            value = str2double(value);
-        end
+        if iscell(value), value = value{1}; end
+        if ischar(value) || isstring(value), value = str2double(value); end
         if isnumeric(value) && isscalar(value) && isreal(value) && isfinite(value) && value > 0
             thickness = value;
         end
     end
     weights(k+1) = density * area * thickness * 1.05;
     validateattributes(weights(k+1),{'numeric'},{'scalar','real','finite','nonnegative'});
-    if strcmp(material,'rho_LWPLA')
-        extraSkinWeight = extraSkinWeight + weights(k+1);
-    end
 end
 
 % Spar input is lb per spar; bulkhead override is the total measured weight.
@@ -85,10 +70,11 @@ if weights(9) == 0
         {'numeric'},{'real','finite','nonnegative'});
     weights(9) = C.N_bulkhead * C.Width_bulkhead * C.Height_bulkhead * C.Depth_bulkhead * density;
 end
-W_pay = weights(10);
-W_empty = sum(weights([1:9 11:12])); % Everything except payload; battery is sized later.
+W_empty = sum(weights); % Payload, mission battery and fuel are excluded.
 assert(W_empty>0,'MaterialWeight:InvalidInput','Empty weight must be positive.');
-W_empty_2x = W_empty + extraSkinWeight; % Double only estimated LWPLA shells.
+W_pay = C.W_pay;
+if ismissing(W_pay), W_pay = 0; end
+validateattributes(W_pay,{'numeric'},{'scalar','real','finite','nonnegative'});
 
 if WeightPlotsOn
     sparLabel = sprintf('%d Wing Spars',C.N_wing_spar);
@@ -97,8 +83,8 @@ if WeightPlotsOn
     end
     labels = {'Nose','Fuselage','Wing','Horizontal Tail 1','Horizontal Tail 2', ...
         'Vertical Tail 1','Vertical Tail 2',sparLabel,sprintf('%d Bulkheads',C.N_bulkhead), ...
-        'Payload','Ballast','Systems'};
-    [plotWeights,order] = sort(weights);
+        'Ballast','Systems','Payload'};
+    [plotWeights,order] = sort([weights W_pay]);
     labels = labels(order(plotWeights>0));
     plotWeights = plotWeights(plotWeights>0);
     figure(700); clf;

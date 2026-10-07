@@ -1,13 +1,10 @@
-function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn,materialEmptyWeight,twoXEmptyWeight)
-    % Optional plotting flag and component empty weights in lb; omitted weights select Raymer.
+function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,Config_Row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn,materialEmptyWeight)
+    % Optional plotting flag and component empty weight in lb; omitted weight selects Raymer.
     if nargin < 12
         WeightPlotsOn = true;
     end
     if nargin < 13
         materialEmptyWeight = [];
-    end
-    if nargin < 14
-        twoXEmptyWeight = materialEmptyWeight;
     end
     validateattributes(WeightPlotsOn,{'numeric','logical'},{'scalar','binary'});
     %% Aircraft Design Mission Performance Sizing Analysis
@@ -119,7 +116,6 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
     useMaterialWeight = ~isempty(materialEmptyWeight);
     if useMaterialWeight
         validateattributes(materialEmptyWeight,{'numeric'},{'scalar','real','finite','positive'});
-        validateattributes(twoXEmptyWeight,{'numeric'},{'scalar','real','finite','>=',materialEmptyWeight});
         % Total weight cannot start below the fixed empty weight and payload.
         W0_guess = max(W0_guess,materialEmptyWeight+W_crew+W_pay_fixed+W_pay_drop);
     else
@@ -130,8 +126,7 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
         assert(i<=100,'Sizing:NoConvergence', ...
             'Sizing did not converge within 100 iterations. Check the selected weight model and mission inputs.');
 
-        %Calculate Aircraft Parameters & Empty Weight based on Total Weight
-        %(W0) and statistical model
+        % Calculate propulsion parameters for the current gross weight.
         disp("Iteration "+ num2str(i)+ ": Gross Takeoff Weight Guess: "+ W0_guess)
 
         if strcmp(PropType,'PROP_Fuel')||strcmp(PropType,'PROP_Electric')||strcmp(PropType,'PROP_Turbocharged')||strcmp(PropType,'PROP_Turboprop')
@@ -139,31 +134,28 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
             V_max = (M_max*a_sl)*(3600/6076); %Max velocity in terms of knots (must convert ft/s to knots using 6076 ft per nautical mile and 3600 sec per hr).
             WingLoading = W0_guess/Sref;
 
-            %Statistical empty weight fraction model for prop aircaft
-            if useMaterialWeight
-                We = materialEmptyWeight;
-                We_W0 = We/W0_guess;
-            else
-                We_W0 = (a*(W0_guess)^c1*(AR)^c2*(Power_Weight_Ratio)^c3*(WingLoading)^c4*(V_max)^c5)*Kvs;
-                We_W0=We_W0*Composite_Factor;
-
-                We = We_W0*W0_guess; %Empty weight of aircraft (lb)
-            end
+            weightModelLoading = Power_Weight_Ratio;
+            weightModelSpeed = V_max;
         else
             Thrust_Weight_Ratio_mil =TA_mil_sl/W0_guess; %Uninstalled thrust at sea level / Wo
             Thrust_Weight_Ratio_AB = TA_AB_sl/W0_guess; %Uninstalled thrust at sea level / Wo
             Thrust_Weight_Ratio = max(Thrust_Weight_Ratio_AB,Thrust_Weight_Ratio_mil); %Size based on max value of T/W
             WingLoading = W0_guess/Sref;
-            %Statistical empty weight fraction model for jet aircaft
-            if useMaterialWeight
-                We = materialEmptyWeight;
-                We_W0 = We/W0_guess;
-            else
-                We_W0 = (a*(W0_guess)^c1*(AR)^c2*(Thrust_Weight_Ratio)^c3*(WingLoading)^c4*(M_max)^c5)*Kvs;
-                We_W0=We_W0*Composite_Factor;
+            weightModelLoading = Thrust_Weight_Ratio;
+            weightModelSpeed = M_max;
+        end
 
-                We = We_W0*W0_guess; %Empty weight of aircraft (lb)
-            end
+        % Select the empty weight used by the main sizing iteration.
+        if useMaterialWeight
+            We = materialEmptyWeight;
+            fixedEmptyWeight = We;
+            emptyWeightFraction = 0;
+        else
+            We_W0 = (a*(W0_guess)^c1*(AR)^c2*(weightModelLoading)^c3*(WingLoading)^c4*(weightModelSpeed)^c5)*Kvs;
+            We_W0=We_W0*Composite_Factor;
+            We = We_W0*W0_guess; % Empty weight of aircraft (lb)
+            fixedEmptyWeight = 0;
+            emptyWeightFraction = We_W0;
         end
         
         %MSN_SEG_Handler replaces past versions of the code where the users
@@ -179,17 +171,15 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
             assert(isreal(BMF) && isfinite(BMF) && BMF>=0 && BMF<1, ...
                 'Sizing:BatteryFraction', ...
                 'Invalid mission battery fraction %.4f at W0 = %.3f lb.',BMF,W0_guess);
-            if useMaterialWeight
-                % W0 = fixed empty weight + crew + payload + BMF*W0.
-                W0_calc=(We+W_crew+W_pay_fixed)/(1-BMF);
-            else
+            if ~useMaterialWeight
                 assert(isreal(We_W0) && isfinite(We_W0) && We_W0>0 && 1-BMF-We_W0>0, ...
                     'Sizing:WeightFraction', ...
                     ['Raymer sizing cannot update at W0 = %.3f lb: empty fraction %.4f + ' ...
                     'battery fraction %.4f leaves no positive payload/crew fraction. ' ...
                     'Check the Raymer category, mission inputs and starting weight.'],W0_guess,We_W0,BMF);
-                W0_calc=(W_crew+W_pay_fixed)/(1-BMF-We_W0);
             end
+            % Component weight is fixed; Raymer contributes a fraction of W0.
+            W0_calc=(fixedEmptyWeight+W_crew+W_pay_fixed)/(1-BMF-emptyWeightFraction);
             %% Calc Difference Between W0_guess and W0_calc
             Diff_W0 = abs(W0_guess-W0_calc)/W0_guess;
             IterationData(i,:)=[i,W0_calc,We,BMF]; %#ok<AGROW>
@@ -240,7 +230,7 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
 
     end
     
-    %% Raymer UAV weight comparison at the nominal component-sized gross weight.
+    %% Raymer UAV weight comparison at the component-sized gross weight.
     if useMaterialWeight
         if startsWith(string(PropType),"PROP_")
             uavCategory = "UAV_Prop";
@@ -256,21 +246,21 @@ function [W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,Wei
         [aR,c1R,c2R,c3R,c4R,c5R] = WeightModel(PropType,uavCategory,msgs);
         uavEstimate = W0*aR*W0^c1R*AR^c2R*loadingR^c3R* ...
             (W0/Sref)^c4R*speedR^c5R*Kvs*Composite_Factor;
-        Model = ["Component Model — Nominal"; "All LWPLA Thicknesses ×2"; raymerLabel];
-        Empty_lb = [materialEmptyWeight; twoXEmptyWeight; uavEstimate];
+        Model = ["Component Model"; raymerLabel];
+        Empty_lb = [materialEmptyWeight; uavEstimate];
         WeightComparison = table(Model,Empty_lb,Empty_lb/W0,Empty_lb-materialEmptyWeight, ...
             'VariableNames',{'Model','Empty_lb','Empty_fraction','Difference_from_component_lb'});
-        fprintf('\nEmpty-weight estimates at common W0 = %.3f lb; only nominal Component model was iterated.\n',W0);
+        fprintf('\nEmpty-weight estimates at common W0 = %.3f lb; Component model was used for sizing.\n',W0);
         disp(WeightComparison)
 
         if WeightPlotsOn
             figure(710); clf;
             barh(Empty_lb);
-            plotLabels = ["Component"; "2× LWPLA Skin"; replace(raymerLabel,":","")];
-            set(gca,'YTick',1:3,'YTickLabel',cellstr(plotLabels),'YDir','reverse');
-            text(Empty_lb,1:3,compose('  %.2g lb',Empty_lb));
-            xlabel('Battery Sizing Input Weight [lb]');
-            title('Component Weight Model vs. Raymer UAV Estimate');
+            plotLabels = ["Component"; replace(raymerLabel,":","")];
+            set(gca,'YTick',1:2,'YTickLabel',cellstr(plotLabels),'YDir','reverse');
+            text(Empty_lb,1:2,compose('  %.2g lb',Empty_lb));
+            xlabel('Empty Weight [lb]');
+            title('Component Empty Weight vs. Raymer UAV Estimate');
         end
     end
 

@@ -2,27 +2,22 @@
 
 Edit `Component_Data` in
 `Input Excel Sheets/Design Configurations/ZW_Snr_Proj_Initial_Design_Config.xlsx`.
-Keep the existing column names and select the aircraft row in the main
-script. Weights are lb, densities are lb/ft³, lengths and skin thicknesses
-are ft, and wetted areas are ft². Wetted areas come from `Main_Input` in
-the same workbook.
+Select aircraft rows in `SD_MAIN_AIRCRAFT_DESIGN_CODE.m`. Wetted areas come
+from `Main_Input`. Units: lb, ft, ft², and lb/ft³.
 
-Positive entered component weights override estimates. Fuselage, wing,
-and tail shells use `weight = 1.05 * density * wetted area * skin thickness`.
-Missing or nonpositive thickness uses 2.5 mm converted to ft. Absent tails
-contribute zero unless a measured weight is entered. Spar weight is
-`N_wing_spar * W_wing_spar`, where `W_wing_spar` is the weight of one spar.
-Bulkheads use `count * width * height * depth * density`, unless their total
-weight is entered directly.
+Shell weight is `1.05 * density * wetted area * thickness`; unusable thickness
+defaults to 2.5 mm converted to ft. Positive measured weights override
+estimates; absent tails contribute zero unless measured. Spar weight is
+`count * weight per spar`. Bulkhead weight is
+`count * width * height * depth * density` unless measured.
 
-Empty weight sums the nose, shells, spars, bulkheads, ballast, and systems.
-It excludes payload and the mission battery. `Read_Material_Weight.m`
-returns this scalar to the main script; `sizing.m` uses it at the existing
-empty-weight calculation and sizes the battery through the mission equations.
+Empty weight includes nose, shells, spars, bulkheads, ballast, and
+`W_systems` (include propulsion and avionics once here). Payload, crew,
+battery, and fuel are separate sizing terms.
 
-Set `WeightModelOn = 1` for Component or `0` for Raymer. Set
-`WeightPlotsOn = 1` to show the breakdown and comparison plots; plotting
-does not export files. The comparison evaluates Raymer at the converged
-Component gross weight. It also doubles only estimated LWPLA shells;
-measured components, spars, and bulkheads stay unchanged. These comparison
-cases are empty-weight estimates, not separate converged sizing runs.
+`Read_Material_Weight.m` returns scalar `W_empty` to the main script;
+`sizing.m` uses it throughout the gross-weight iteration.
+
+Set `WeightModelOn = 1` for Component or `0` for Raymer.
+`WeightPlotsOn = 1` shows the breakdown and two-bar comparison.
+Raymer is evaluated at converged Component gross weight for comparison only.

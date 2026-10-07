@@ -36,9 +36,6 @@ function MSN_Profile=Read_MSN_Profile(Filename,SheetNum,ProfileName)
     %the 
     for i=1:size(Inputs,1)
         Idx=find(NaN_log(i,:),1);%idx of first NAN
-        if isempty(Idx)
-            Idx=size(Inputs,2)+1; % Keep every input when the row is full.
-        end
         input_table(i)={Inputs(i,1:Idx-1)};
 
 

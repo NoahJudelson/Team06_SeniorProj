@@ -54,7 +54,7 @@ Configuration_filename="ZW_Snr_Proj_Initial_Design_Config.xlsx";
 
 %Sizing Analysis
 WeightModelOn = 1; % 1 = Component (fixed empty weight), 0 = Raymer (iterated)
-WeightPlotsOn = 0; % 1 = show weight plots, 0 = skip plots
+WeightPlotsOn = 1; % 1 = show weight plots, 0 = skip plots
 W_crew = 0; %lb
 W_pay_fixed = 8.8; %lb
 W_pay_drop = 0; %lb
@@ -84,9 +84,8 @@ disp(DragPolar_Model(config_row,:))
 %% Select the empty-weight model; pass scalar empty weights to sizing.
 validateattributes(WeightModelOn,{'numeric','logical'},{'scalar','binary'});
 W_empty = [];
-W_empty_2x = [];
 if WeightModelOn
-    [W_empty,W_empty_2x,W_pay_fixed] = Read_Material_Weight(Configuration_filename,config_row,component_row,WeightPlotsOn);
+    [W_empty,W_pay_fixed] = Read_Material_Weight(Configuration_filename,config_row,component_row,WeightPlotsOn);
     WeightModelChoice = 'Component';
 else
     WeightModelChoice = 'Raymer';
@@ -105,7 +104,7 @@ fprintf('Sizing weight model: %s | Payload: %.3f lb\n',WeightModelChoice,W_pay_f
 
 %%Mission Performance/Sizing Analysis
 MSN_Profile=Read_MSN_Profile(MissionProfile_filename,sheetnumber,ProfileName);
-[W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn,W_empty,W_empty_2x);
+[W0,FinalWeightData,IterationData,FinalSegmentData,outputTable,msgs,WeightComparison]=sizing(MSN_Profile,config_row,W0_guess,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data,W_crew,W_pay_fixed,W_pay_drop,msgs,WeightPlotsOn,W_empty);
 % [RangeFactor_Data,M_eval_range,Alt_eval_range,RF_W] = RangeFactor(config_row,FinalWeightData,Design_Input,Propulsion_Input,DragPolar_Model,WaveDrag_Data);
 displaySizingData(displayFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,MSN_Profile);
 outputfilename = writeSizingData(writeFlag,W0,FinalSegmentData,FinalWeightData,IterationData,outputTable,DragPolar_Model,ProfileName,codeversion,outputfolder);
